@@ -9,9 +9,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Özel CSS ile Profesyonel Tasarım Düzenlemeleri
+# Mobil Dokunmatik Kilitlenme ve Çekerek Yenilemeyi (Pull-to-Refresh) Engelleyen CSS
 st.markdown("""
     <style>
+    /* Mobilde aşağı çekerek sayfayı yenilemeyi engeller */
+    html, body {
+        overscroll-behavior-y: none !important;
+        overflow-x: hidden;
+    }
+    .stApp {
+        overscroll-behavior-y: none !important;
+    }
     .stButton>button {
         border-radius: 8px;
         font-weight: bold;
@@ -111,3 +119,4 @@ if st.button("📊 MAÇI ANALİZ ET", type="primary", use_container_width=True):
     st.markdown("##### 🏆 En Olası 3 Skor Tahmini")
     for idx, ((h, a), prob) in enumerate(top_scores, 1):
         st.success(f"**{idx}. Olasılık:** {h} - {a} &nbsp;&nbsp;(`%{prob*100:.1f}`)")
+        
