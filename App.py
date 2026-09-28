@@ -3,7 +3,7 @@ import math
 
 # Sayfa Yapılandırması
 st.set_page_config(
-    page_title="Gelişmiş Poisson Analiz", 
+    page_title="Pro Poisson Analiz Motoru", 
     page_icon="⚽", 
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -38,13 +38,13 @@ with col_reload:
     if st.button("🔄", help="Sayfayı Sıfırla"):
         st.rerun()
 
-st.caption("Dixon-Coles modeli, İç/Dış saha formu ve Value Bet analizi ile gelişmiş tahminler.")
+st.caption("Gelişmiş Dixon-Coles modeli ve akıllı bahis öneri sistemi.")
 st.divider()
 
 # ---------------------------------------------------------
 # VERİ GİRİŞ ALANLARI
 # ---------------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["🏠 EV SAHİBİ (İÇ SAHA)", "✈️ DEPLASMAN (DIŞ SAHA)", "💰 ORANLAR (OPTİONAL)"])
+tab1, tab2, tab3 = st.tabs(["🏠 EV SAHİBİ (İÇ SAHA)", "✈️ DEPLASMAN (DIŞ SAHA)", "💰 ORANLAR (İSTEĞE BAĞLI)"])
 
 with tab1:
     ev_adi = st.text_input("Ev Sahibi Takım", value="Beşiktaş", key="ev_name")
@@ -54,7 +54,6 @@ with tab1:
         ev_att_toplam = st.number_input("İç Sahada Attığı Gol", min_value=0.0, value=16.0, step=1.0, key="ev_att")
     with col_e2:
         ev_def_toplam = st.number_input("İç Sahada Yediği Gol", min_value=0.0, value=6.0, step=1.0, key="ev_def")
-        ev_form = st.slider("Son 5 Maç Formu (0: Çok Kötü, 100: Mükemmel)", 0, 100, 75, key="ev_form")
 
 with tab2:
     dep_adi = st.text_input("Deplasman Takımı", value="Trabzonspor", key="dep_name")
@@ -64,10 +63,9 @@ with tab2:
         dep_att_toplam = st.number_input("Dış Sahada Attığı Gol", min_value=0.0, value=11.0, step=1.0, key="dep_att")
     with col_d2:
         dep_def_toplam = st.number_input("Dış Sahada Yediği Gol", min_value=0.0, value=10.0, step=1.0, key="dep_def")
-        dep_form = st.slider("Son 5 Maç Formu (0: Çok Kötü, 100: Mükemmel) ", 0, 100, 60, key="dep_form")
 
 with tab3:
-    st.write("Değer analizi için büro oranlarını girebilirsiniz:")
+    st.write("Değer (Value) analizi yapmak isterseniz büro oranlarını girebilirsiniz:")
     o_ms1 = st.number_input("MS 1 Oranı", min_value=1.0, value=2.10, step=0.05)
     o_ms0 = st.number_input("MS 0 Oranı", min_value=1.0, value=3.20, step=0.05)
     o_ms2 = st.number_input("MS 2 Oranı", min_value=1.0, value=3.10, step=0.05)
@@ -96,13 +94,9 @@ if st.button("📊 DETAYLI MAÇ ANALİZİ YAP", type="primary", use_container_wi
     dep_att = dep_att_toplam / dep_mac
     dep_def = dep_def_toplam / dep_mac
 
-    # Form Ağırlığı Çarpanı (%80 Sezon Ortalaması + %20 Form)
-    ev_form_factor = 0.8 + (ev_form / 250.0)
-    dep_form_factor = 0.8 + (dep_form / 250.0)
-
-    # xG Hesaplaması (Lig ortalaması baz kabul edilir: ~1.35)
-    xg_ev = (ev_att * dep_def / 1.35) * ev_form_factor
-    xg_dep = (dep_att * ev_def / 1.35) * dep_form_factor
+    # xG Hesaplaması
+    xg_ev = (ev_att * dep_def / 1.35)
+    xg_dep = (dep_att * ev_def / 1.35)
     toplam_xg = xg_ev + xg_dep
 
     matrix = {}
@@ -113,7 +107,7 @@ if st.button("📊 DETAYLI MAÇ ANALİZİ YAP", type="primary", use_container_wi
             tau = dixon_coles_tau(h, a, xg_ev, xg_dep)
             matrix[(h, a)] = p_h * p_a * tau
 
-    # Toplam Olasılığı 1'e Normalize Etme
+    # Normalize Etme
     total_p = sum(matrix.values())
     for k in matrix:
         matrix[k] /= total_p
@@ -121,16 +115,23 @@ if st.button("📊 DETAYLI MAÇ ANALİZİ YAP", type="primary", use_container_wi
     ms1 = sum(p for (h, a), p in matrix.items() if h > a)
     ms0 = sum(p for (h, a), p in matrix.items() if h == a)
     ms2 = sum(p for (h, a), p in matrix.items() if h < a)
+    
+    dc_1x = ms1 + ms0
+    dc_x2 = ms0 + ms2
+    dc_12 = ms1 + ms2
+
+    ust15 = sum(p for (h, a), p in matrix.items() if h + a > 1.5)
     ust25 = sum(p for (h, a), p in matrix.items() if h + a > 2.5)
+    ust35 = sum(p for (h, a), p in matrix.items() if h + a > 3.5)
+    alt25 = 1 - ust25
+
     kg_var = sum(p for (h, a), p in matrix.items() if h > 0 and a > 0)
     top_scores = sorted(matrix.items(), key=lambda x: x[1], reverse=True)[:3]
 
-    # Adil Oranlar (Fair Odds)
     fair_ms1 = 1 / ms1 if ms1 > 0 else 0
     fair_ms0 = 1 / ms0 if ms0 > 0 else 0
     fair_ms2 = 1 / ms2 if ms2 > 0 else 0
 
-    # Value Bet Tespiti
     val_ms1 = (ms1 * o_ms1) - 1
     val_ms0 = (ms0 * o_ms0) - 1
     val_ms2 = (ms2 * o_ms2) - 1
@@ -158,18 +159,64 @@ if st.button("📊 DETAYLI MAÇ ANALİZİ YAP", type="primary", use_container_wi
     for idx, ((h, a), prob) in enumerate(top_scores, 1):
         st.success(f"**{idx}. Olasılık:** {h} - {a} &nbsp;&nbsp;(`%{prob*100:.1f}`)")
 
-    # Value Bet Bildirimleri
-    st.markdown("##### 💰 Value Bet (Değerli Oran) Analizi")
-    has_value = False
-    if val_ms1 > 0.05:
-        st.warning(f"💎 **MS 1 Değerli Oran!** Verilen Oran: `{o_ms1}` | Beklenen Değer: `+{val_ms1*100:.1f}%`")
-        has_value = True
-    if val_ms0 > 0.05:
-        st.warning(f"💎 **MS 0 Değerli Oran!** Verilen Oran: `{o_ms0}` | Beklenen Değer: `+{val_ms0*100:.1f}%`")
-        has_value = True
-    if val_ms2 > 0.05:
-        st.warning(f"💎 **MS 2 Değerli Oran!** Verilen Oran: `{o_ms2}` | Beklenen Değer: `+{val_ms2*100:.1f}%`")
-        has_value = True
-        
-    if not has_value:
-        st.write("Ortada belirgin bir Value Bet bulunamadı (Oranlar piyasa ile dengeli).")
+    # ---------------------------------------------------------
+    # OTOMATİK ÖNERİLEN BAHİSLER PANELİ
+    # ---------------------------------------------------------
+    st.divider()
+    st.markdown("### 💡 MAÇ İÇİN ÖNERİLEN BAHİSLER")
+
+    # Banko Öneri
+    banko_tercih = ""
+    if ust15 > 0.75:
+        banko_tercih = f"1.5 Üst (Olasılık: %{ust15*100:.1f})"
+    elif dc_1x > 0.75:
+        banko_tercih = f"Çifte Şans 1X (Olasılık: %{dc_1x*100:.1f})"
+    elif dc_x2 > 0.75:
+        banko_tercih = f"Çifte Şans X2 (Olasılık: %{dc_x2*100:.1f})"
+    else:
+        banko_tercih = f"Çifte Şans 12 (Olasılık: %{dc_12*100:.1f})"
+
+    st.write(f"🟢 **Günün Bankosu:** `{banko_tercih}`")
+
+    # İdeal Tercih
+    ideal_tercih = ""
+    if ms1 > 0.55:
+        ideal_tercih = f"Maç Sonucu 1 (Olasılık: %{ms1*100:.1f})"
+    elif ms2 > 0.55:
+        ideal_tercih = f"Maç Sonucu 2 (Olasılık: %{ms2*100:.1f})"
+    elif ust25 > 0.58:
+        ideal_tercih = f"2.5 Üst Gol (Olasılık: %{ust25*100:.1f})"
+    elif alt25 > 0.58:
+        ideal_tercih = f"2.5 Alt Gol (Olasılık: %{alt25*100:.1f})"
+    elif kg_var > 0.55:
+        ideal_tercih = f"KG Var (Olasılık: %{kg_var*100:.1f})"
+    else:
+        ideal_tercih = "Taraf bahsi riskli, Karşılıklı Gol veya Alt/Üst seçenekleri değerlendirilmeli."
+
+    st.write(f"🟡 **İdeal / Ana Bahis:** `{ideal_tercih}`")
+
+    # Sürpriz / Yüksek Oran Önerisi
+    surpriz_tercih = ""
+    if kg_var > 0.52 and ust25 > 0.52:
+        surpriz_tercih = "KG Var & 2.5 Üst Kombinasyonu"
+    elif ms1 > 0.45 and kg_var > 0.50:
+        surpriz_tercih = f"MS 1 & KG Var ({ev_adi} kazanır ve gol yer)"
+    elif ms2 > 0.45 and kg_var > 0.50:
+        surpriz_tercih = f"MS 2 & KG Var ({dep_adi} kazanır ve gol yer)"
+    elif ust35 > 0.35:
+        surpriz_tercih = f"3.5 Üst Gol (Olasılık: %{ust35*100:.1f})"
+    else:
+        surpriz_tercih = f"En olası skor olan {top_scores[0][0][0]}-{top_scores[0][0][1]} skor bahsi."
+
+    st.write(f"🔴 **Sürpriz / Yüksek Oran:** `{surpriz_tercih}`")
+
+    # Value Bet Bildirimi
+    if val_ms1 > 0.05 or val_ms0 > 0.05 or val_ms2 > 0.05:
+        st.markdown("---")
+        st.markdown("##### 💎 Değerli (Value) Oran Fırsatı")
+        if val_ms1 > 0.05:
+            st.warning(f"**MS 1 Oranı Değerli!** Büro Oranı: `{o_ms1}` | Beklenen Değer: `+{val_ms1*100:.1f}%`")
+        if val_ms0 > 0.05:
+            st.warning(f"**MS 0 Oranı Değerli!** Büro Oranı: `{o_ms0}` | Beklenen Değer: `+{val_ms0*100:.1f}%`")
+        if val_ms2 > 0.05:
+            st.warning(f"**MS 2 Oranı Değerli!** Büro Oranı: `{o_ms2}` | Beklenen Değer: `+{val_ms2*100:.1f}%`")
