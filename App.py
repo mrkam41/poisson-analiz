@@ -179,8 +179,8 @@ st.write("")
 # ---------------------------------------------------------
 # INPUT FORM (DIRECT ENTRY SYSTEM)
 # ---------------------------------------------------------
-st.markdown("<div class="pro-card">", unsafe_allow_html=True)
-st.markdown("<span class="stat-badge badge-primary">Girdi Ekranı</span> <h3 style="margin: 8px 0 15px 0;">Takım ve Metrik Bilgileri (Doğrudan Ortalamalar)</h3>", unsafe_allow_html=True)
+st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+st.markdown("""<span class="stat-badge badge-primary">Girdi Ekranı</span> <h3 style="margin: 8px 0 15px 0;">Takım ve Metrik Bilgileri (Doğrudan Ortalamalar)</h3>""", unsafe_allow_html=True)
 
 col_h, col_a = st.columns(2)
 
@@ -202,7 +202,7 @@ with col_a:
     with col_a2:
         away_def = st.number_input(f"{away_name} Yediği Gol (Maç Başı)", min_value=0.0, max_value=5.0, value=1.25, step=0.05, help="Deplasmanın dış sahadaki maç başı ortalama yediği gol.")
 
-st.markdown("<hr style="margin: 15px 0 !important;">", unsafe_allow_html=True)
+st.markdown("""<hr style="margin: 15px 0 !important;">""", unsafe_allow_html=True)
 st.markdown("#### 💰 Büro Oranları (Value Bet Analizi İçin - İsteğe Bağlı)")
 
 col_o1, col_o2, col_o3 = st.columns(3)
@@ -213,7 +213,7 @@ with col_o2:
 with col_o3:
     odds_ms2 = st.number_input("MS 2 Oranı", min_value=1.0, value=3.10, step=0.05)
 
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("""</div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # POISSON & DIXON-COLES ENGINE
@@ -245,7 +245,7 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     xg_away = away_attack_power * home_defense_power * league_away_xg
     total_xg = xg_home + xg_away
 
-    # Matris ve Olasılık Hesabı (6x6)
+    # Matris ve Olasılık Hesabı (7x7)
     matrix = {}
     for h in range(7):
         for a in range(7):
@@ -449,8 +449,8 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     sc1, sc2 = st.columns([0.4, 0.6])
     
     with sc1:
-        st.markdown("<div class="pro-card">", unsafe_allow_html=True)
-        st.markdown("#### 🎯 En Olası 4 Skor Tahmini", unsafe_allow_html=True)
+        st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+        st.markdown("""#### 🎯 En Olası 4 Skor Tahmini""", unsafe_allow_html=True)
         for idx, ((h, a), prob) in enumerate(top_scores, 1):
             st.markdown(f"""
             <div style="display:flex; justify-content:space-between; align-items:center; background:#1a2332; padding:10px 14px; border-radius:8px; margin-bottom:8px; border:1px solid #334155;">
@@ -458,7 +458,7 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
                 <span class="stat-badge badge-success">%{prob*100:.1f} Olasılık</span>
             </div>
             """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""</div>""", unsafe_allow_html=True)
 
     with sc2:
         # Smart Decision Logic
