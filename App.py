@@ -92,7 +92,7 @@ def dixon_coles_tau(h, a, xg_h, xg_a, rho_val, use_dc):
     else: return 1.0
 
 @st.cache_data
-def run_simulation(xg_home, xg_away, iy_ratio, rho, use_dc, n_simulations):
+def run_simulation(xg_home, xg_away, rho, use_dc, n_simulations):
     # Ana Maç Poisson Çekimleri
     raw_home = np.random.poisson(xg_home, n_simulations)
     raw_away = np.random.poisson(xg_away, n_simulations)
@@ -117,7 +117,8 @@ def run_simulation(xg_home, xg_away, iy_ratio, rho, use_dc, n_simulations):
         sim_home_goals = raw_home
         sim_away_goals = raw_away
 
-    # İlk Yarı Çekimleri
+    # İlk Yarı Çekimleri (Arka planda %44 sabit xG payı ile)
+    iy_ratio = 0.44
     iy_xg_home = xg_home * iy_ratio
     iy_xg_away = xg_away * iy_ratio
     sim_iy_home = np.random.poisson(iy_xg_home, n_simulations)
@@ -148,7 +149,6 @@ with st.sidebar:
 
     st.markdown("---")
     n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000)
-    iy_ratio = st.slider("İLK Yarı xG Payı (%)", 35, 50, 44, step=1) / 100.0
     bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500)
     use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True)
     rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01) if use_dixon_coles else 0.0
@@ -217,7 +217,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
 
     # Cache'lenmiş Simülasyon Motorunu Çalıştır
     sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away = run_simulation(
-        xg_home, xg_away, iy_ratio, rho, use_dixon_coles, n_simulations
+        xg_home, xg_away, rho, use_dixon_coles, n_simulations
     )
 
     sim_total_goals = sim_home_goals + sim_away_goals
