@@ -246,8 +246,8 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     )
     st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    # 2. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK) - TEKİL SÜRÜM
-    st.markdown("### ⚽ Genel Gol Pazarları (Tekil/Yalın)")
+    # 2. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK)
+    st.markdown("### ⚽ Genel Gol Pazarları (Tekil)")
     
     p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
     p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
@@ -290,7 +290,49 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         </div>
         """, unsafe_allow_html=True)
 
-    # 3. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
+    # 3. TOPLAM GOL ARALIĞI (TGA) PAZARLARI
+    st.markdown("### 📊 Toplam Gol Aralığı (TGA)")
+    p_tg_01 = np.sum((sim_total_goals >= 0) & (sim_total_goals <= 1)) / n_simulations
+    p_tg_23 = np.sum((sim_total_goals >= 2) & (sim_total_goals <= 3)) / n_simulations
+    p_tg_45 = np.sum((sim_total_goals >= 4) & (sim_total_goals <= 5)) / n_simulations
+    p_tg_6plus = np.sum(sim_total_goals >= 6) / n_simulations
+
+    tg_c1, tg_c2 = st.columns(2)
+    with tg_c1:
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-warning">0 - 1 GOL</span>
+            <h3 style="margin:5px 0; color:#fbbf24;">%{p_tg_01*100:.1f}</h3>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_01 if p_tg_01>0 else 0:.2f}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-primary">4 - 5 GOL</span>
+            <h3 style="margin:5px 0; color:#60a5fa;">%{p_tg_45*100:.1f}</h3>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_45 if p_tg_45>0 else 0:.2f}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with tg_c2:
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-success">2 - 3 GOL</span>
+            <h3 style="margin:5px 0; color:#34d399;">%{p_tg_23*100:.1f}</h3>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_23 if p_tg_23>0 else 0:.2f}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-danger">6+ GOL</span>
+            <h3 style="margin:5px 0; color:#f87171;">%{p_tg_6plus*100:.1f}</h3>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_6plus if p_tg_6plus>0 else 0:.2f}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 4. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
     st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
     is_ust_25 = sim_total_goals > 2.5
     is_ust_15 = sim_total_goals > 1.5
@@ -312,7 +354,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     with m4:
         st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_yok_25_alt if p_kg_yok_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
 
-    # 4. KELLY VALUE BETS
+    # 5. KELLY VALUE BETS
     st.markdown("### 💵 Kelly Value Bet Önerileri")
     def calc_kelly(prob, odds):
         val = (prob * odds) - 1.0
@@ -330,7 +372,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     with k_col2: st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
     with k_col3: st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
 
-    # 5. İY / MS MATRIX
+    # 6. İY / MS MATRIX
     st.markdown("### 🔄 İY / MS Olasılıkları")
     iy_ms_combos = [
         ("1 / 1", (iy_res == 1) & (ms_res == 1)), ("X / 1", (iy_res == 0) & (ms_res == 1)), ("2 / 1", (iy_res == 2) & (ms_res == 1)),
@@ -344,7 +386,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         with i_cols[idx % 3]:
             st.markdown(f"<div class='pro-card' style='padding:8px; text-align:center;'><b>{lbl}</b><br><span style='color:#34d399;'>%{pr*100:.1f}</span></div>", unsafe_allow_html=True)
 
-    # 6. TAKIM ÖZEL GOL PAZARLARI
+    # 7. TAKIM ÖZEL GOL PAZARLARI
     st.markdown("### ⚽ Takım Özel Golleri")
     tg1, tg2 = st.columns(2)
     with tg1:
