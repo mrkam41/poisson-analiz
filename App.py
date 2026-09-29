@@ -1,11 +1,12 @@
 import streamlit as st
 import math
+import numpy as np
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Pro Football Analytics Engine - Ultimate Edition", 
+    page_title="Pro Football Analytics Engine - Monte Carlo Edition", 
     page_icon="⚽", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -91,7 +92,8 @@ with st.sidebar:
     league_corner_avg = st.number_input("Lig Korner Ortalaması", min_value=5.0, max_value=15.0, value=default_cor, step=0.5, key="l_cor")
 
     st.markdown("---")
-    st.markdown("#### 🧮 Model & Kasa Ayarları")
+    st.markdown("#### 🎲 Simülasyon & Kasa Ayarları")
+    n_simulations = st.select_slider("Monte Carlo Simülasyon Sayısı", options=[1000, 5000, 10000, 20000, 50000], value=10000, key="sim_cnt")
     bankroll = st.number_input("Toplam Bahis Kasası (₺)", min_value=100, value=10000, step=500, key="bankroll")
     use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True, key="dc_check")
     rho = st.slider("Dixon-Coles Korelasyonu (Rho)", -0.30, 0.0, -0.13, 0.01, key="rho_slider") if use_dixon_coles else 0.0
@@ -102,7 +104,7 @@ with st.sidebar:
 st.markdown("""
 <div style="padding-bottom: 10px;">
     <h1 style="margin:0; font-size: 28px; font-weight: 800; color: #ffffff;">⚽ Professional Football Analytics Engine</h1>
-    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Gelişmiş Poisson, Kelly Kriteri & Kadro Etki Modeli</p>
+    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Poisson, Dixon-Coles & Monte Carlo Simülasyon Motoru</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -125,7 +127,7 @@ with col_h:
     with col_h3:
         home_goals_conceded = st.number_input("Yediği Gol", min_value=0, value=8, step=1, key="hg_cc")
     
-    home_missing = st.slider("Ev Sahibi Kadro/Sakatlık Eksik Etkisi (%)", 0, 30, 0, step=5, help="Takımın önemli eksiklerine göre güç düşüşü %'si")
+    home_missing = st.slider("Ev Sahibi Kadro/Sakatlık Eksik Etkisi (%)", 0, 30, 0, step=5)
 
 with col_a:
     st.markdown("#### ✈️ Deplasman Takımı")
@@ -138,10 +140,10 @@ with col_a:
     with col_a3:
         away_goals_conceded = st.number_input("Yediği Gol ", min_value=0, value=13, step=1, key="ag_cc")
         
-    away_missing = st.slider("Deplasman Kadro/Sakatlık Eksik Etkisi (%)", 0, 30, 0, step=5, help="Takımın önemli eksiklerine göre güç düşüşü %'si")
+    away_missing = st.slider("Deplasman Kadro/Sakatlık Eksik Etkisi (%)", 0, 30, 0, step=5)
 
 home_att_avg = (home_goals_scored / home_matches) * (1 - (home_missing / 100))
-home_def_avg = (home_goals_conceded / home_matches) * (1 + (home_missing / 200)) # Eksik savunmayı zayıflatır
+home_def_avg = (home_goals_conceded / home_matches) * (1 + (home_missing / 200))
 away_att_avg = (away_goals_scored / away_matches) * (1 - (away_missing / 100))
 away_def_avg = (away_goals_conceded / away_matches) * (1 + (away_missing / 200))
 
@@ -159,7 +161,7 @@ with col_o3:
 st.markdown("""</div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# ENGINE & CALCULATIONS
+# DIXON-COLES ENGINE
 # ---------------------------------------------------------
 def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
     if not use_dixon_coles: return 1.0
@@ -169,9 +171,9 @@ def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
     elif h == 1 and a == 1: return 1.0 - rho_val
     else: return 1.0
 
-if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=True):
+if st.button("🔥 MAÇI VE MONTE CARLO SİMÜLASYONUNU ÇALIŞTIR", use_container_width=True):
     
-    # 1. KORREKTE XG POISSON HESAPLAMASI
+    # 1. xG HESAPLAMASI
     home_attack_power = home_att_avg / league_home_xg if league_home_xg > 0 else 1.0
     home_defense_power = home_def_avg / league_home_xg if league_home_xg > 0 else 1.0
     away_attack_power = away_att_avg / league_away_xg if league_away_xg > 0 else 1.0
@@ -181,7 +183,30 @@ if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=Tr
     xg_away = away_attack_power * home_defense_power * league_away_xg
     total_xg = xg_home + xg_away
 
-    # 2. MATRIX HESAPLAMA
+    # 2. MONTE CARLO SİMÜLASYONU (NUMPY İLE)
+    sim_home_goals = np.random.poisson(xg_home, n_simulations)
+    sim_away_goals = np.random.poisson(xg_away, n_simulations)
+
+    sim_ms1_wins = np.sum(sim_home_goals > sim_away_goals)
+    sim_draws = np.sum(sim_home_goals == sim_away_goals)
+    sim_ms2_wins = np.sum(sim_home_goals < sim_away_goals)
+
+    p_sim_ms1 = sim_ms1_wins / n_simulations
+    p_sim_ms0 = sim_draws / n_simulations
+    p_sim_ms2 = sim_ms2_wins / n_simulations
+
+    sim_total_goals = sim_home_goals + sim_away_goals
+    p_sim_ust15 = np.sum(sim_total_goals > 1.5) / n_simulations
+    p_sim_ust25 = np.sum(sim_total_goals > 2.5) / n_simulations
+    p_sim_ust35 = np.sum(sim_total_goals > 3.5) / n_simulations
+
+    p_sim_kgvar = np.sum((sim_home_goals > 0) & (sim_away_goals > 0)) / n_simulations
+
+    # ASYA HANDİKAP SİMÜLASYONU (Ev Sahibi -0.5 ve -1.0)
+    p_sim_ah_h_05 = p_sim_ms1 # Ev sahibi kazanır
+    p_sim_ah_h_10 = np.sum(sim_home_goals - sim_away_goals > 1) / n_simulations
+
+    # 3. POISSON ANALİTİK MATRIX
     matrix = {}
     for h in range(7):
         for a in range(7):
@@ -193,55 +218,64 @@ if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=Tr
     total_p = sum(matrix.values())
     for k in matrix: matrix[k] /= total_p
 
-    # 3. MAÇ SONUCU VE ALT/ÜST OLASILIKLARI
-    p_ms1 = sum(p for (h, a), p in matrix.items() if h > a)
-    p_ms0 = sum(p for (h, a), p in matrix.items() if h == a)
-    p_ms2 = sum(p for (h, a), p in matrix.items() if h < a)
-
-    p_alt15 = sum(p for (h, a), p in matrix.items() if h + a < 1.5)
-    p_ust15 = 1.0 - p_alt15
-    p_alt25 = sum(p for (h, a), p in matrix.items() if h + a < 2.5)
-    p_ust25 = 1.0 - p_alt25
-    p_alt35 = sum(p for (h, a), p in matrix.items() if h + a < 3.5)
-    p_ust35 = 1.0 - p_alt35
-    
-    p_kgvar = sum(p for (h, a), p in matrix.items() if h > 0 and a > 0)
-    p_kgyok = 1.0 - p_kgvar
-
-    # İLK YARI GOL OLASILIĞI (Yaklaşık Poisson parametresi xG'nin %45'i)
-    iy_total_xg = total_xg * 0.45
-    p_iy_05_ust = 1.0 - math.exp(-iy_total_xg)
-
-    # KORNER TAHMİNİ (xG Temelli Korner Endeksi)
-    est_corners = league_corner_avg * (total_xg / (league_home_xg + league_away_xg))
-
-    # 4. KELLY KRİTERİ & VALUE BET
+    # KELLY CALCULATOR
     def calc_kelly(prob, odds):
         value = (prob * odds) - 1.0
         if value <= 0: return 0.0, 0.0
         b = odds - 1.0
-        fractional_kelly = ((prob * b) - (1.0 - prob)) / b * 0.25 # Fractional %25
+        fractional_kelly = ((prob * b) - (1.0 - prob)) / b * 0.25
         stake = bankroll * max(0.0, fractional_kelly)
         return value, stake
 
-    val1, stake1 = calc_kelly(p_ms1, odds_ms1)
-    val0, stake0 = calc_kelly(p_ms0, odds_ms0)
-    val2, stake2 = calc_kelly(p_ms2, odds_ms2)
+    val1, stake1 = calc_kelly(p_sim_ms1, odds_ms1)
+    val0, stake0 = calc_kelly(p_sim_ms0, odds_ms0)
+    val2, stake2 = calc_kelly(p_sim_ms2, odds_ms2)
 
-    # REPORT HEADER
+    # HEADER DISPLAY
     st.markdown("---")
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:16px; padding:25px; border:1px solid #334155; text-align:center; margin-bottom:25px;">
-        <span class="stat-badge badge-primary">ANALİZ VE TAHMİN RAPORU</span>
+        <span class="stat-badge badge-primary">{n_simulations:,} MAÇ SİMÜLE EDİLDİ</span>
         <h2 style="font-size:30px; font-weight:800; margin: 10px 0 5px 0; color:#ffffff;">{home_name.upper()} vs {away_name.upper()}</h2>
         <p style="color:#94a3b8; font-size:15px; margin:0;">
-            Model xG: <b style="color:#38bdf8;">{home_name}: {xg_home:.2f}</b> | <b style="color:#f43f5e;">{away_name}: {xg_away:.2f}</b> &nbsp;•&nbsp; Toplam xG: <b style="color:#34d399;">{total_xg:.2f}</b> &nbsp;•&nbsp; Est. Korner: <b style="color:#fbbf24;">{est_corners:.1f}</b>
+            Model xG: <b style="color:#38bdf8;">{home_name}: {xg_home:.2f}</b> | <b style="color:#f43f5e;">{away_name}: {xg_away:.2f}</b> &nbsp;•&nbsp; Toplam xG: <b style="color:#34d399;">{total_xg:.2f}</b>
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # 5. KELLY KASA YÖNETİMİ BÖLÜMÜ (YENİ KUSURSUZ ÖZELLİK)
-    st.markdown("### 💵 Kelly Kriteri ile Değerli Bahis & Kasa Yönetimi")
+    # MONTE CARLO BÖLÜMÜ
+    st.markdown(f"### 🎲 Monte Carlo Simülasyon Sonuçları ({n_simulations:,} Maç)")
+    sc1, sc2, sc3 = st.columns(3)
+
+    with sc1:
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-primary">EV SAHİBİ GALİBİYETİ</span>
+            <h2 style="font-size:36px; margin:10px 0; color:#60a5fa;">%{p_sim_ms1*100:.1f}</h2>
+            <p style="color:#94a3b8; margin:0;">{sim_ms1_wins:,} Simüle Maç</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sc2:
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-warning">BERABERLİK</span>
+            <h2 style="font-size:36px; margin:10px 0; color:#fbbf24;">%{p_sim_ms0*100:.1f}</h2>
+            <p style="color:#94a3b8; margin:0;">{sim_draws:,} Simüle Maç</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with sc3:
+        st.markdown(f"""
+        <div class="pro-card" style="text-align:center;">
+            <span class="stat-badge badge-danger">DEPLASMAN GALİBİYETİ</span>
+            <h2 style="font-size:36px; margin:10px 0; color:#f87171;">%{p_sim_ms2*100:.1f}</h2>
+            <p style="color:#94a3b8; margin:0;">{sim_ms2_wins:,} Simüle Maç</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # KELLY BÖLÜMÜ
+    st.markdown("### 💵 Kelly Kriteri ile Kasa Yönetimi (Simülasyon Bazlı)")
     col_k1, col_k2, col_k3 = st.columns(3)
 
     with col_k1:
@@ -254,7 +288,6 @@ if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=Tr
         else:
             st.markdown("""<span class="stat-badge badge-danger">DEĞERSİZ (PAS)</span>""", unsafe_allow_html=True)
             st.markdown("<h3 style='margin:10px 0; color:#94a3b8;'>0 ₺</h3>", unsafe_allow_html=True)
-            st.write("Oran risk/kazanç dengesi altında.")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
     with col_k2:
@@ -267,7 +300,6 @@ if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=Tr
         else:
             st.markdown("""<span class="stat-badge badge-danger">DEĞERSİZ (PAS)</span>""", unsafe_allow_html=True)
             st.markdown("<h3 style='margin:10px 0; color:#94a3b8;'>0 ₺</h3>", unsafe_allow_html=True)
-            st.write("Oran risk/kazanç dengesi altında.")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
     with col_k3:
@@ -280,39 +312,38 @@ if st.button("🔥 MAÇI KUSURSUZ MODEL İLE ANALİZ ET", use_container_width=Tr
         else:
             st.markdown("""<span class="stat-badge badge-danger">DEĞERSİZ (PAS)</span>""", unsafe_allow_html=True)
             st.markdown("<h3 style='margin:10px 0; color:#94a3b8;'>0 ₺</h3>", unsafe_allow_html=True)
-            st.write("Oran risk/kazanç dengesi altında.")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
-    # 6. DETAYLI İSTATİSTİKLER VE DİĞER PAZARLAR
-    st.markdown("### 📊 Detaylı Olasılık Dağılımları & İY / Korner")
+    # DETAYLI MARKET TAHMİNLERİ
+    st.markdown("### 📊 Detaylı Market Dağılımları & Handikap")
     col_m1, col_m2, col_m3 = st.columns(3)
 
     with col_m1:
         st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
-        st.markdown("#### 🎯 Maç Sonucu (1X2)")
-        st.write(f"**MS 1 ({home_name}):** %{p_ms1*100:.1f} *(Adil Oran: {1/p_ms1:.2f})*")
-        st.write(f"**MS 0 (Beraberlik):** %{p_ms0*100:.1f} *(Adil Oran: {1/p_ms0:.2f})*")
-        st.write(f"**MS 2 ({away_name}):** %{p_ms2*100:.1f} *(Adil Oran: {1/p_ms2:.2f})*")
+        st.markdown("#### ⚽ Alt / Üst (Simülasyon)")
+        st.write(f"**1.5 Üst:** %{p_sim_ust15*100:.1f}")
+        st.write(f"**2.5 Üst:** %{p_sim_ust25*100:.1f}")
+        st.write(f"**3.5 Üst:** %{p_sim_ust35*100:.1f}")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
     with col_m2:
         st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
-        st.markdown("#### ⚽ Alt / Üst Olasılıkları")
-        st.write(f"**1.5 Üst:** %{p_ust15*100:.1f} | **1.5 Alt:** %{p_alt15*100:.1f}")
-        st.write(f"**2.5 Üst:** %{p_ust25*100:.1f} | **2.5 Alt:** %{p_alt25*100:.1f}")
-        st.write(f"**3.5 Üst:** %{p_ust35*100:.1f} | **3.5 Alt:** %{p_alt35*100:.1f}")
+        st.markdown("#### 🥊 KG & Asya Handikap")
+        st.write(f"**KG Var:** %{p_sim_kgvar*100:.1f}")
+        st.write(f"**Ev Sahibi (-0.5 Handikap):** %{p_sim_ah_h_05*100:.1f}")
+        st.write(f"**Ev Sahibi (-1.0 Farklı Kazanır):** %{p_sim_ah_h_10*100:.1f}")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
     with col_m3:
         st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
-        st.markdown("#### ⏱️ İY & Korner Pazarları")
-        st.write(f"**İlk Yarı 0.5 Üst:** %{p_iy_05_ust*100:.1f}")
-        st.write(f"**KG Var:** %{p_kgvar*100:.1f} | **KG Yok:** %{p_kgyok*100:.1f}")
-        st.write(f"**Beklenen Korner:** {est_corners:.1f}")
+        st.markdown("#### ⏱️ Ortalama İstatistikler")
+        st.write(f"**Simülasyon Ort. Gol:** {np.mean(sim_total_goals):.2f}")
+        st.write(f"**Ev Sahibi Ort. Gol:** {np.mean(sim_home_goals):.2f}")
+        st.write(f"**Deplasman Ort. Gol:** {np.mean(sim_away_goals):.2f}")
         st.markdown("""</div>""", unsafe_allow_html=True)
 
-    # 7. EN OLASI SKORLAR
-    st.markdown("### 🎲 En Olası 5 Skor Tahmini")
+    # EN OLASI SKORLAR
+    st.markdown("### 🎲 En Olası Skorlar")
     top_scores = sorted(matrix.items(), key=lambda x: x[1], reverse=True)[:5]
     
     score_cols = st.columns(5)
