@@ -78,6 +78,54 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
+# HELPER FUNCTIONS & ENGINE
+# ---------------------------------------------------------
+def get_fair_odds(prob):
+    return f"{1.0 / prob:.2f}" if prob > 0.0001 else "—"
+
+def dixon_coles_tau(h, a, xg_h, xg_a, rho_val, use_dc):
+    if not use_dc: return 1.0
+    if h == 0 and a == 0: return max(0.0, 1.0 - (xg_h * xg_a * rho_val))
+    elif h == 0 and a == 1: return max(0.0, 1.0 + (xg_h * rho_val))
+    elif h == 1 and a == 0: return max(0.0, 1.0 + (xg_a * rho_val))
+    elif h == 1 and a == 1: return max(0.0, 1.0 - rho_val)
+    else: return 1.0
+
+@st.cache_data
+def run_simulation(xg_home, xg_away, iy_ratio, rho, use_dc, n_simulations):
+    # Ana Maç Poisson Çekimleri
+    raw_home = np.random.poisson(xg_home, n_simulations)
+    raw_away = np.random.poisson(xg_away, n_simulations)
+    
+    if use_dc:
+        weights = np.ones(n_simulations)
+        m00 = (raw_home == 0) & (raw_away == 0)
+        m10 = (raw_home == 1) & (raw_away == 0)
+        m01 = (raw_home == 0) & (raw_away == 1)
+        m11 = (raw_home == 1) & (raw_away == 1)
+
+        weights[m00] = dixon_coles_tau(0, 0, xg_home, xg_away, rho, True)
+        weights[m10] = dixon_coles_tau(1, 0, xg_home, xg_away, rho, True)
+        weights[m01] = dixon_coles_tau(0, 1, xg_home, xg_away, rho, True)
+        weights[m11] = dixon_coles_tau(1, 1, xg_home, xg_away, rho, True)
+
+        probs = weights / weights.sum()
+        indices = np.random.choice(n_simulations, size=n_simulations, p=probs)
+        sim_home_goals = raw_home[indices]
+        sim_away_goals = raw_away[indices]
+    else:
+        sim_home_goals = raw_home
+        sim_away_goals = raw_away
+
+    # İlk Yarı Çekimleri
+    iy_xg_home = xg_home * iy_ratio
+    iy_xg_away = xg_away * iy_ratio
+    sim_iy_home = np.random.poisson(iy_xg_home, n_simulations)
+    sim_iy_away = np.random.poisson(iy_xg_away, n_simulations)
+
+    return sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away
+
+# ---------------------------------------------------------
 # SIDEBAR PARAMETERS
 # ---------------------------------------------------------
 with st.sidebar:
@@ -100,6 +148,7 @@ with st.sidebar:
 
     st.markdown("---")
     n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000)
+    iy_ratio = st.slider("İLK Yarı xG Payı (%)", 35, 50, 44, step=1) / 100.0
     bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500)
     use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True)
     rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01) if use_dixon_coles else 0.0
@@ -152,17 +201,6 @@ with col_o3: odds_ms2 = st.number_input("MS 2", min_value=1.0, value=3.10, step=
 st.markdown("""</div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# DIXON-COLES ENGINE
-# ---------------------------------------------------------
-def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
-    if not use_dixon_coles: return 1.0
-    if h == 0 and a == 0: return 1.0 - (xg_h * xg_a * rho_val)
-    elif h == 0 and a == 1: return 1.0 + (xg_h * rho_val)
-    elif h == 1 and a == 0: return 1.0 + (xg_a * rho_val)
-    elif h == 1 and a == 1: return 1.0 - rho_val
-    else: return 1.0
-
-# ---------------------------------------------------------
 # EXECUTION
 # ---------------------------------------------------------
 if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_width=True):
@@ -177,16 +215,12 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     xg_away = away_attack_power * home_defense_power * league_away_xg
     total_xg = xg_home + xg_away
 
-    iy_xg_home = xg_home * 0.45
-    iy_xg_away = xg_away * 0.45
+    # Cache'lenmiş Simülasyon Motorunu Çalıştır
+    sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away = run_simulation(
+        xg_home, xg_away, iy_ratio, rho, use_dixon_coles, n_simulations
+    )
 
-    # Simülasyon Verileri
-    sim_home_goals = np.random.poisson(xg_home, n_simulations)
-    sim_away_goals = np.random.poisson(xg_away, n_simulations)
     sim_total_goals = sim_home_goals + sim_away_goals
-
-    sim_iy_home = np.random.poisson(iy_xg_home, n_simulations)
-    sim_iy_away = np.random.poisson(iy_xg_away, n_simulations)
     sim_iy_total = sim_iy_home + sim_iy_away
 
     # Taraf ve İY Sonuçları
@@ -201,7 +235,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     iy_res = np.where(sim_iy_home > sim_iy_away, 1, np.where(sim_iy_home == sim_iy_away, 0, 2))
     ms_res = np.where(sim_home_goals > sim_away_goals, 1, np.where(sim_home_goals == sim_away_goals, 0, 2))
 
-    # Skor Matrisi (Poisson / Dixon Coles)
+    # Analitik Skor Matrisi
     max_g = 6
     matrix = np.zeros((max_g, max_g))
     scores_dict = {}
@@ -209,12 +243,10 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         for a in range(max_g):
             p_h = (math.pow(xg_home, h) * math.exp(-xg_home)) / math.factorial(h)
             p_a = (math.pow(xg_away, a) * math.exp(-xg_away)) / math.factorial(a)
-            tau = dixon_coles_tau(h, a, xg_home, xg_away, rho)
+            tau = dixon_coles_tau(h, a, xg_home, xg_away, rho, use_dixon_coles)
             prob = p_h * p_a * tau
             matrix[h, a] = prob
             scores_dict[f"{h}-{a}"] = prob
-            
-    matrix /= np.sum(matrix)
 
     # HEADER
     st.markdown("---")
@@ -227,7 +259,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     </div>
     """, unsafe_allow_html=True)
 
-    # 1. GÖRSEL ANALİZ & GRAFİKLER (PLOTLY)
+    # 1. GÖRSEL ANALİZ & GRAFİKLER
     st.markdown("### 📊 Görsel Grafikler")
     
     fig_prob = go.Figure(data=[
@@ -261,13 +293,13 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     sc_cols = st.columns(5)
     for idx, (sc_name, sc_prob) in enumerate(sorted_scores):
         sc_pct = sc_prob * 100
-        sc_fair = 1 / sc_prob if sc_prob > 0 else 0
+        sc_fair = get_fair_odds(sc_prob)
         with sc_cols[idx]:
             st.markdown(f"""
             <div class="pro-card" style="text-align:center;">
                 <b style="font-size:16px; color:#38bdf8;">{sc_name}</b><br>
                 <span style="color:#34d399;">%{sc_pct:.1f}</span><br>
-                <span style="font-size:11px; color:#94a3b8;">Adil: {sc_fair:.2f}</span>
+                <span style="font-size:11px; color:#94a3b8;">Adil: {sc_fair}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -278,24 +310,24 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     p_x2 = p_sim_ms0 + p_sim_ms2
 
     p_ah_h_minus_15 = np.sum((sim_home_goals - sim_away_goals) > 1.5) / n_simulations
-    p_ah_a_plus_15 = 1 - p_ah_h_minus_15
+    p_ah_a_plus_15 = 1.0 - p_ah_h_minus_15
 
     cs1, cs2 = st.columns(2)
     with cs1:
         st.markdown(f"""
         <div class="pro-card">
             <b>ÇİFTE ŞANS</b><br>
-            • 1X: <b style="color:#34d399;">%{p_1x*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_1x if p_1x>0 else 0:.2f})</span><br>
-            • 12: <b style="color:#34d399;">%{p_12*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_12 if p_12>0 else 0:.2f})</span><br>
-            • X2: <b style="color:#34d399;">%{p_x2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_x2 if p_x2>0 else 0:.2f})</span>
+            • 1X: <b style="color:#34d399;">%{p_1x*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_1x)})</span><br>
+            • 12: <b style="color:#34d399;">%{p_12*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_12)})</span><br>
+            • X2: <b style="color:#34d399;">%{p_x2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_x2)})</span>
         </div>
         """, unsafe_allow_html=True)
     with cs2:
         st.markdown(f"""
         <div class="pro-card">
             <b>ASYA HANDİKAP (1.5)</b><br>
-            • {home_name} -1.5: <b style="color:#60a5fa;">%{p_ah_h_minus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_ah_h_minus_15 if p_ah_h_minus_15>0 else 0:.2f})</span><br>
-            • {away_name} +1.5: <b style="color:#34d399;">%{p_ah_a_plus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_ah_a_plus_15 if p_ah_a_plus_15>0 else 0:.2f})</span>
+            • {home_name} -1.5: <b style="color:#60a5fa;">%{p_ah_h_minus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_h_minus_15)})</span><br>
+            • {away_name} +1.5: <b style="color:#34d399;">%{p_ah_a_plus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_a_plus_15)})</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -309,21 +341,21 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         st.markdown(f"""
         <div class="pro-card">
             <b>İY TARAF SONUCU</b><br>
-            • İY 1: <b>%{p_iy1*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy1 if p_iy1>0 else 0:.2f})</span><br>
-            • İY X: <b>%{p_iy0*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy0 if p_iy0>0 else 0:.2f})</span><br>
-            • İY 2: <b>%{p_iy2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy2 if p_iy2>0 else 0:.2f})</span>
+            • İY 1: <b>%{p_iy1*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy1)})</span><br>
+            • İY X: <b>%{p_iy0*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy0)})</span><br>
+            • İY 2: <b>%{p_iy2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy2)})</span>
         </div>
         """, unsafe_allow_html=True)
     with iy_c2:
         st.markdown(f"""
         <div class="pro-card">
             <b>İY GOL PAZARLARI</b><br>
-            • İY 0.5 Üst: <b style="color:#34d399;">%{p_iy_05_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy_05_ust if p_iy_05_ust>0 else 0:.2f})</span><br>
-            • İY 1.5 Üst: <b style="color:#60a5fa;">%{p_iy_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy_15_ust if p_iy_15_ust>0 else 0:.2f})</span>
+            • İY 0.5 Üst: <b style="color:#34d399;">%{p_iy_05_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_05_ust)})</span><br>
+            • İY 1.5 Üst: <b style="color:#60a5fa;">%{p_iy_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_15_ust)})</span>
         </div>
         """, unsafe_allow_html=True)
 
-    # 5. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK)
+    # 5. YALIN GENEL GOL PAZARLARI
     st.markdown("### ⚽ Genel Gol Pazarları (Tekil)")
     p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
     p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
@@ -336,16 +368,16 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         st.markdown(f"""
         <div class="pro-card">
             <b>1.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_15_ust if p_15_ust>0 else 0:.2f})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_15_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_15_ust) if p_15_ust<1 else 0:.2f})</span>
+            • Üst: <b style="color:#34d399;">%{p_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_15_ust)})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_15_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_15_ust)})</span>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="pro-card">
             <b>3.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_35_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_35_ust if p_35_ust>0 else 0:.2f})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_35_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_35_ust) if p_35_ust<1 else 0:.2f})</span>
+            • Üst: <b style="color:#34d399;">%{p_35_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_35_ust)})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_35_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_35_ust)})</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -353,16 +385,16 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         st.markdown(f"""
         <div class="pro-card">
             <b>2.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_25_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_25_ust if p_25_ust>0 else 0:.2f})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_25_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_25_ust) if p_25_ust<1 else 0:.2f})</span>
+            • Üst: <b style="color:#34d399;">%{p_25_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_25_ust)})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_25_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_25_ust)})</span>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown(f"""
         <div class="pro-card">
             <b>KARŞILIKLI GOL (KG)</b><br>
-            • KG Var: <b style="color:#34d399;">%{p_kg_var*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_kg_var if p_kg_var>0 else 0:.2f})</span><br>
-            • KG Yok: <b style="color:#f87171;">%{(1-p_kg_var)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_kg_var) if p_kg_var<1 else 0:.2f})</span>
+            • KG Var: <b style="color:#34d399;">%{p_kg_var*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_kg_var)})</span><br>
+            • KG Yok: <b style="color:#f87171;">%{(1-p_kg_var)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_kg_var)})</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -379,7 +411,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         <div class="pro-card" style="text-align:center;">
             <span class="stat-badge badge-warning">0 - 1 GOL</span>
             <h3 style="margin:5px 0; color:#fbbf24;">%{p_tg_01*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_01 if p_tg_01>0 else 0:.2f}</b></p>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_01)}</b></p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -387,7 +419,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         <div class="pro-card" style="text-align:center;">
             <span class="stat-badge badge-primary">4 - 5 GOL</span>
             <h3 style="margin:5px 0; color:#60a5fa;">%{p_tg_45*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_45 if p_tg_45>0 else 0:.2f}</b></p>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_45)}</b></p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -396,7 +428,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         <div class="pro-card" style="text-align:center;">
             <span class="stat-badge badge-success">2 - 3 GOL</span>
             <h3 style="margin:5px 0; color:#34d399;">%{p_tg_23*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_23 if p_tg_23>0 else 0:.2f}</b></p>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_23)}</b></p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -404,7 +436,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         <div class="pro-card" style="text-align:center;">
             <span class="stat-badge badge-danger">6+ GOL</span>
             <h3 style="margin:5px 0; color:#f87171;">%{p_tg_6plus*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{1/p_tg_6plus if p_tg_6plus>0 else 0:.2f}</b></p>
+            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_6plus)}</b></p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -420,15 +452,15 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
 
     m1, m2 = st.columns(2)
     with m1:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-success">POPÜLER</span><h4 style="margin:5px 0;">KG Var & 2.5 Üst</h4><h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_ust if p_kg_var_25_ust>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-success">POPÜLER</span><h4 style="margin:5px 0;">KG Var & 2.5 Üst</h4><h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_ust)}</b></p></div>""", unsafe_allow_html=True)
     with m2:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-primary">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 1.5 Üst</h4><h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_15_ust if p_kg_var_15_ust>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-primary">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 1.5 Üst</h4><h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_15_ust)}</b></p></div>""", unsafe_allow_html=True)
 
     m3, m4 = st.columns(2)
     with m3:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-warning">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 2.5 Alt</h4><h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_alt if p_kg_var_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-warning">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 2.5 Alt</h4><h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_alt)}</b></p></div>""", unsafe_allow_html=True)
     with m4:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_yok_25_alt if p_kg_yok_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_yok_25_alt)}</b></p></div>""", unsafe_allow_html=True)
 
     # 8. KELLY VALUE BETS
     st.markdown("### 💵 Kelly Value Bet Önerileri")
