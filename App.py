@@ -1,10 +1,5 @@
 import streamlit as st
 import math
-import io
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION
@@ -58,38 +53,7 @@ st.markdown("""
     .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 
-    .metric-value-huge {
-        font-size: 32px;
-        font-weight: 800;
-        letter-spacing: -1px;
-        background: linear-gradient(90deg, #60a5fa, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    .heatmap-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 4px;
-        font-size: 13px;
-        margin-top: 10px;
-    }
-    .heatmap-table th {
-        background-color: #1e293b;
-        color: #94a3b8;
-        padding: 10px;
-        font-weight: 600;
-        border-radius: 6px;
-        text-align: center;
-    }
-    .heatmap-table td {
-        padding: 12px 8px;
-        text-align: center;
-        border-radius: 6px;
-        font-weight: 600;
-    }
-
-    .stButton > button, .stDownloadButton > button {
+    .stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%) !important;
         color: #ffffff !important;
@@ -114,74 +78,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# PDF RApor OLUŞTURMA FONKSİYONU
-# ---------------------------------------------------------
-def generate_pdf_report(home_name, away_name, xg_home, xg_away, p_ms1, p_ms0, p_ms2, banko, ideal, surpriz, top_scores):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#1e293b'), alignment=1, spaceAfter=15)
-    sub_style = ParagraphStyle('SubStyle', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#2563eb'), spaceAfter=10)
-    text_style = ParagraphStyle('TextStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'), spaceAfter=6)
-
-    # Başlık
-    story.append(Paragraph(f"<b>MAÇ ANALİZ VE TAHMİN RAPORU</b>", title_style))
-    story.append(Paragraph(f"<b>{home_name.upper()} vs {away_name.upper()}</b>", title_style))
-    story.append(Spacer(1, 10))
-
-    # xG Bilgisi
-    data_xg = [
-        ["Takım", "Beklenen Gol (xG)"],
-        [home_name, f"{xg_home:.2f}"],
-        [away_name, f"{xg_away:.2f}"],
-        ["Toplam xG", f"{xg_home + xg_away:.2f}"]
-    ]
-    t_xg = Table(data_xg, colWidths=[200, 200])
-    t_xg.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563eb')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-    ]))
-    story.append(t_xg)
-    story.append(Spacer(1, 15))
-
-    # Maç Sonu Olasılıkları
-    story.append(Paragraph("<b>1. Maç Sonucu Olasılıkları</b>", sub_style))
-    data_ms = [
-        ["MS 1 (%)", "MS 0 (%)", "MS 2 (%)"],
-        [f"%{p_ms1*100:.1f}", f"%{p_ms0*100:.1f}", f"%{p_ms2*100:.1f}"]
-    ]
-    t_ms = Table(data_ms, colWidths=[130, 130, 130])
-    t_ms.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0f172a')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-    ]))
-    story.append(t_ms)
-    story.append(Spacer(1, 15))
-
-    # Stratejik Öneriler
-    story.append(Paragraph("<b>2. Algoritmik Strateji Kartı</b>", sub_style))
-    story.append(Paragraph(f"• <b>BANKO TERCİH:</b> {banko}", text_style))
-    story.append(Paragraph(f"• <b>İDEAL BAHİS:</b> {ideal}", text_style))
-    story.append(Paragraph(f"• <b>SÜRPRİZ TERCİH:</b> {surpriz}", text_style))
-    story.append(Spacer(1, 15))
-
-    # Olası Skorlar
-    story.append(Paragraph("<b>3. En Olası Skorlar</b>", sub_style))
-    for idx, ((h, a), prob) in enumerate(top_scores, 1):
-        story.append(Paragraph(f"#{idx} Skor: <b>{h} - {a}</b> (Olasılık: %{prob*100:.1f})", text_style))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
 
 # ---------------------------------------------------------
 # SIDEBAR - CONFIGURATION & PARAMETERS
@@ -217,7 +113,7 @@ with st.sidebar:
 st.markdown("""
 <div style="padding-bottom: 10px;">
     <h1 style="margin:0; font-size: 28px; font-weight: 800; color: #ffffff;">⚽ Professional Football Analytics Engine</h1>
-    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Pratik Veri Girişi, Otomatik Analiz ve PDF Raporlama Sistemi</p>
+    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Pratik Veri Girişi ve Otomatik Analiz Sistemi</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -312,8 +208,6 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     p_ust25 = 1.0 - p_alt25
     p_kgvar = sum(p for (h, a), p in matrix.items() if h > 0 and a > 0)
 
-    top_scores = sorted(matrix.items(), key=lambda x: x[1], reverse=True)[:4]
-
     # Strateji
     banko = f"1.5 Gol Üst (%{p_ust15*100:.1f})" if p_ust15 > 0.75 else f"Çifte Şans 1X (%{(p_ms1+p_ms0)*100:.1f})"
     ideal = f"MS 1 (%{p_ms1*100:.1f})" if p_ms1 > 0.50 else (f"2.5 Üst (%{p_ust25*100:.1f})" if p_ust25 > 0.52 else f"KG Var (%{p_kgvar*100:.1f})")
@@ -340,15 +234,3 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
         st.markdown(f"""<div class="pro-card"><span class="stat-badge badge-primary">İDEAL</span><p style="margin-top:8px; font-weight:700;">{ideal}</p></div>""", unsafe_allow_html=True)
     with sc3:
         st.markdown(f"""<div class="pro-card"><span class="stat-badge badge-warning">SÜRPRİZ</span><p style="margin-top:8px; font-weight:700;">{surpriz}</p></div>""", unsafe_allow_html=True)
-
-    # PDF INDIRME BUTONU (MADDE 6)
-    st.markdown("---")
-    st.markdown("### 📄 Analiz Raporunu İndir")
-    pdf_file = generate_pdf_report(home_name, away_name, xg_home, xg_away, p_ms1, p_ms0, p_ms2, banko, ideal, surpriz, top_scores)
-    
-    st.download_button(
-        label="📥 PDF MAÇ RAPORUNU İNDİR",
-        data=pdf_file,
-        file_name=f"{home_name}_vs_{away_name}_Analiz_Raporu.pdf",
-        mime="application/pdf"
-    )
