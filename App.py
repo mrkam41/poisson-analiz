@@ -187,11 +187,16 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
 
     sim_iy_home = np.random.poisson(iy_xg_home, n_simulations)
     sim_iy_away = np.random.poisson(iy_xg_away, n_simulations)
+    sim_iy_total = sim_iy_home + sim_iy_away
 
     # Taraf ve İY Sonuçları
     p_sim_ms1 = np.sum(sim_home_goals > sim_away_goals) / n_simulations
     p_sim_ms0 = np.sum(sim_home_goals == sim_away_goals) / n_simulations
     p_sim_ms2 = np.sum(sim_home_goals < sim_away_goals) / n_simulations
+
+    p_iy1 = np.sum(sim_iy_home > sim_iy_away) / n_simulations
+    p_iy0 = np.sum(sim_iy_home == sim_iy_away) / n_simulations
+    p_iy2 = np.sum(sim_iy_home < sim_iy_away) / n_simulations
 
     iy_res = np.where(sim_iy_home > sim_iy_away, 1, np.where(sim_iy_home == sim_iy_away, 0, 2))
     ms_res = np.where(sim_home_goals > sim_away_goals, 1, np.where(sim_home_goals == sim_away_goals, 0, 2))
@@ -199,12 +204,16 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     # Skor Matrisi (Poisson / Dixon Coles)
     max_g = 6
     matrix = np.zeros((max_g, max_g))
+    scores_dict = {}
     for h in range(max_g):
         for a in range(max_g):
             p_h = (math.pow(xg_home, h) * math.exp(-xg_home)) / math.factorial(h)
             p_a = (math.pow(xg_away, a) * math.exp(-xg_away)) / math.factorial(a)
             tau = dixon_coles_tau(h, a, xg_home, xg_away, rho)
-            matrix[h, a] = p_h * p_a * tau
+            prob = p_h * p_a * tau
+            matrix[h, a] = prob
+            scores_dict[f"{h}-{a}"] = prob
+            
     matrix /= np.sum(matrix)
 
     # HEADER
@@ -246,9 +255,76 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     )
     st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    # 2. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK)
+    # 2. EN YÜKSEK OLASILIKLI SKORLAR (TOP 5)
+    st.markdown("### 🎯 En Yüksek Olasılıklı 5 Skor")
+    sorted_scores = sorted(scores_dict.items(), key=lambda item: item[1], reverse=True)[:5]
+    sc_cols = st.columns(5)
+    for idx, (sc_name, sc_prob) in enumerate(sorted_scores):
+        sc_pct = sc_prob * 100
+        sc_fair = 1 / sc_prob if sc_prob > 0 else 0
+        with sc_cols[idx]:
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center;">
+                <b style="font-size:16px; color:#38bdf8;">{sc_name}</b><br>
+                <span style="color:#34d399;">%{sc_pct:.1f}</span><br>
+                <span style="font-size:11px; color:#94a3b8;">Adil: {sc_fair:.2f}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # 3. ÇİFTE ŞANS & ASYA HANDİKAP
+    st.markdown("### 🛡️ Çifte Şans & Asya Handikap")
+    p_1x = p_sim_ms1 + p_sim_ms0
+    p_12 = p_sim_ms1 + p_sim_ms2
+    p_x2 = p_sim_ms0 + p_sim_ms2
+
+    p_ah_h_minus_15 = np.sum((sim_home_goals - sim_away_goals) > 1.5) / n_simulations
+    p_ah_a_plus_15 = 1 - p_ah_h_minus_15
+
+    cs1, cs2 = st.columns(2)
+    with cs1:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>ÇİFTE ŞANS</b><br>
+            • 1X: <b style="color:#34d399;">%{p_1x*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_1x if p_1x>0 else 0:.2f})</span><br>
+            • 12: <b style="color:#34d399;">%{p_12*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_12 if p_12>0 else 0:.2f})</span><br>
+            • X2: <b style="color:#34d399;">%{p_x2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_x2 if p_x2>0 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with cs2:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>ASYA HANDİKAP (1.5)</b><br>
+            • {home_name} -1.5: <b style="color:#60a5fa;">%{p_ah_h_minus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_ah_h_minus_15 if p_ah_h_minus_15>0 else 0:.2f})</span><br>
+            • {away_name} +1.5: <b style="color:#34d399;">%{p_ah_a_plus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_ah_a_plus_15 if p_ah_a_plus_15>0 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 4. İLK YARI (İY) PAZARLARI
+    st.markdown("### ⏱️ İlk Yarı (İY) Pazarları")
+    p_iy_05_ust = np.sum(sim_iy_total > 0.5) / n_simulations
+    p_iy_15_ust = np.sum(sim_iy_total > 1.5) / n_simulations
+
+    iy_c1, iy_c2 = st.columns(2)
+    with iy_c1:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>İY TARAF SONUCU</b><br>
+            • İY 1: <b>%{p_iy1*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy1 if p_iy1>0 else 0:.2f})</span><br>
+            • İY X: <b>%{p_iy0*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy0 if p_iy0>0 else 0:.2f})</span><br>
+            • İY 2: <b>%{p_iy2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy2 if p_iy2>0 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with iy_c2:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>İY GOL PAZARLARI</b><br>
+            • İY 0.5 Üst: <b style="color:#34d399;">%{p_iy_05_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy_05_ust if p_iy_05_ust>0 else 0:.2f})</span><br>
+            • İY 1.5 Üst: <b style="color:#60a5fa;">%{p_iy_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_iy_15_ust if p_iy_15_ust>0 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 5. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK)
     st.markdown("### ⚽ Genel Gol Pazarları (Tekil)")
-    
     p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
     p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
     p_35_ust = np.sum(sim_total_goals > 3.5) / n_simulations
@@ -290,7 +366,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         </div>
         """, unsafe_allow_html=True)
 
-    # 3. TOPLAM GOL ARALIĞI (TGA) PAZARLARI
+    # 6. TOPLAM GOL ARALIĞI (TGA) PAZARLARI
     st.markdown("### 📊 Toplam Gol Aralığı (TGA)")
     p_tg_01 = np.sum((sim_total_goals >= 0) & (sim_total_goals <= 1)) / n_simulations
     p_tg_23 = np.sum((sim_total_goals >= 2) & (sim_total_goals <= 3)) / n_simulations
@@ -332,7 +408,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         </div>
         """, unsafe_allow_html=True)
 
-    # 4. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
+    # 7. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
     st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
     is_ust_25 = sim_total_goals > 2.5
     is_ust_15 = sim_total_goals > 1.5
@@ -354,7 +430,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     with m4:
         st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_yok_25_alt if p_kg_yok_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
 
-    # 5. KELLY VALUE BETS
+    # 8. KELLY VALUE BETS
     st.markdown("### 💵 Kelly Value Bet Önerileri")
     def calc_kelly(prob, odds):
         val = (prob * odds) - 1.0
@@ -372,7 +448,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
     with k_col2: st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
     with k_col3: st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
 
-    # 6. İY / MS MATRIX
+    # 9. İY / MS MATRIX
     st.markdown("### 🔄 İY / MS Olasılıkları")
     iy_ms_combos = [
         ("1 / 1", (iy_res == 1) & (ms_res == 1)), ("X / 1", (iy_res == 0) & (ms_res == 1)), ("2 / 1", (iy_res == 2) & (ms_res == 1)),
@@ -386,7 +462,7 @@ if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_wid
         with i_cols[idx % 3]:
             st.markdown(f"<div class='pro-card' style='padding:8px; text-align:center;'><b>{lbl}</b><br><span style='color:#34d399;'>%{pr*100:.1f}</span></div>", unsafe_allow_html=True)
 
-    # 7. TAKIM ÖZEL GOL PAZARLARI
+    # 10. TAKIM ÖZEL GOL PAZARLARI
     st.markdown("### ⚽ Takım Özel Golleri")
     tg1, tg2 = st.columns(2)
     with tg1:
