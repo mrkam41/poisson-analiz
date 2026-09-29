@@ -8,14 +8,14 @@ import plotly.express as px
 # PAGE CONFIGURATION
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Pro Football Engine - Mobile Edition", 
+    page_title="Pro Football Engine - Ultimate Mobile", 
     page_icon="⚽", 
     layout="wide",
-    initial_sidebar_state="collapsed" # Mobilde varsayılan kapalı sidebar
+    initial_sidebar_state="collapsed"
 )
 
 # ---------------------------------------------------------
-# MOBILE-FIRST CUSTOM STYLING (CSS)
+# MOBILE-FIRST STYLING (CSS)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -30,13 +30,12 @@ st.markdown("""
     header[data-testid="stHeader"] { background: rgba(11, 15, 23, 0.9) !important; backdrop-filter: blur(8px); }
     footer { visibility: hidden; }
 
-    /* Mobil için optimize edilmiş Card yapısı */
     .pro-card {
         background: linear-gradient(145deg, #131b2e 0%, #0f1623 100%);
         border: 1px solid #1e293b;
         border-radius: 12px;
-        padding: 14px;
-        margin-bottom: 12px;
+        padding: 12px;
+        margin-bottom: 10px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
 
@@ -54,7 +53,6 @@ st.markdown("""
     .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
     .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
-    /* Mobilde Buton Boyutlandırma */
     .stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%) !important;
@@ -67,11 +65,10 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4) !important;
     }
 
-    /* Mobilde küçük ekranlar için yazı boyutu düzenlemesi */
     @media (max-width: 640px) {
-        h1 { font-size: 22px !important; }
-        h2 { font-size: 18px !important; }
-        h3 { font-size: 16px !important; }
+        h1 { font-size: 20px !important; }
+        h2 { font-size: 17px !important; }
+        h3 { font-size: 15px !important; }
         .pro-card { padding: 10px; }
     }
 
@@ -85,7 +82,6 @@ st.markdown("""
 # ---------------------------------------------------------
 with st.sidebar:
     st.markdown("### ⚙️ Lig & Model Ayarları")
-    
     league_preset = st.selectbox("🏆 Lig Şablonu", ["Özel / Elle Gir", "Süper Lig (TR)", "Premier League (UK)", "La Liga (ES)", "Bundesliga (DE)"], key="league_preset")
     
     if league_preset == "Süper Lig (TR)":
@@ -99,14 +95,14 @@ with st.sidebar:
     else:
         default_h, default_a = 1.50, 1.20
 
-    league_home_xg = st.number_input("Lig Ev Ort. Gol", min_value=0.1, max_value=4.0, value=default_h, step=0.05, key="l_h_xg")
-    league_away_xg = st.number_input("Lig Dep Ort. Gol", min_value=0.1, max_value=4.0, value=default_a, step=0.05, key="l_a_xg")
+    league_home_xg = st.number_input("Lig Ev Ort. Gol", min_value=0.1, max_value=4.0, value=default_h, step=0.05)
+    league_away_xg = st.number_input("Lig Dep Ort. Gol", min_value=0.1, max_value=4.0, value=default_a, step=0.05)
 
     st.markdown("---")
-    n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000, key="sim_cnt")
-    bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500, key="bankroll")
-    use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True, key="dc_check")
-    rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01, key="rho_slider") if use_dixon_coles else 0.0
+    n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000)
+    bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500)
+    use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True)
+    rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01) if use_dixon_coles else 0.0
 
 # ---------------------------------------------------------
 # MAIN HEADER
@@ -114,12 +110,12 @@ with st.sidebar:
 st.markdown("""
 <div style="text-align: center; padding-bottom: 10px;">
     <h1 style="margin:0; color: #ffffff; font-weight:800;">⚽ Football Analytics Pro</h1>
-    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 13px;">Mobil Uyumlu & Visual Grafik Engine</p>
+    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 13px;">Tüm Detaylı Pazarlar & Mobil Visual Engine</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# INPUT FORM (MOBIL FRIENDLY)
+# INPUT FORM
 # ---------------------------------------------------------
 st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
 st.markdown("""<span class="stat-badge badge-primary">Giriş Paneli</span>""", unsafe_allow_html=True)
@@ -128,18 +124,18 @@ col_h, col_a = st.columns(2)
 
 with col_h:
     st.markdown("##### 🏠 Ev Sahibi")
-    home_name = st.text_input("Takım", value="Beşiktaş", key="h_name")
-    home_matches = st.number_input("Maç", min_value=1, value=10, key="hm_cnt")
-    home_goals_scored = st.number_input("Attığı", min_value=0, value=20, key="hg_sc")
-    home_goals_conceded = st.number_input("Yediği", min_value=0, value=8, key="hg_cc")
+    home_name = st.text_input("Takım", value="Beşiktaş")
+    home_matches = st.number_input("Maç", min_value=1, value=10)
+    home_goals_scored = st.number_input("Attığı", min_value=0, value=20)
+    home_goals_conceded = st.number_input("Yediği", min_value=0, value=8)
     home_missing = st.slider("Ev Eksik Etkisi %", 0, 30, 0, step=5)
 
 with col_a:
     st.markdown("##### ✈️ Deplasman")
-    away_name = st.text_input("Takım ", value="Trabzonspor", key="a_name")
-    away_matches = st.number_input("Maç ", min_value=1, value=10, key="am_cnt")
-    away_goals_scored = st.number_input("Attığı ", min_value=0, value=14, key="ag_sc")
-    away_goals_conceded = st.number_input("Yediği ", min_value=0, value=13, key="ag_cc")
+    away_name = st.text_input("Takım ", value="Trabzonspor")
+    away_matches = st.number_input("Maç ", min_value=1, value=10)
+    away_goals_scored = st.number_input("Attığı ", min_value=0, value=14)
+    away_goals_conceded = st.number_input("Yediği ", min_value=0, value=13)
     away_missing = st.slider("Dep Eksik Etkisi %", 0, 30, 0, step=5)
 
 home_att_avg = (home_goals_scored / home_matches) * (1 - (home_missing / 100))
@@ -156,7 +152,7 @@ with col_o3: odds_ms2 = st.number_input("MS 2", min_value=1.0, value=3.10, step=
 st.markdown("""</div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# DIXON-COLES FUNCTION
+# DIXON-COLES ENGINE
 # ---------------------------------------------------------
 def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
     if not use_dixon_coles: return 1.0
@@ -167,9 +163,9 @@ def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
     else: return 1.0
 
 # ---------------------------------------------------------
-# RUN CALCULATION
+# EXECUTION
 # ---------------------------------------------------------
-if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
+if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_width=True):
     
     # xG Hesapları
     home_attack_power = home_att_avg / league_home_xg if league_home_xg > 0 else 1.0
@@ -184,7 +180,7 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
     iy_xg_home = xg_home * 0.45
     iy_xg_away = xg_away * 0.45
 
-    # Monte Carlo Simülasyonu
+    # Simülasyon Verileri
     sim_home_goals = np.random.poisson(xg_home, n_simulations)
     sim_away_goals = np.random.poisson(xg_away, n_simulations)
     sim_total_goals = sim_home_goals + sim_away_goals
@@ -192,6 +188,7 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
     sim_iy_home = np.random.poisson(iy_xg_home, n_simulations)
     sim_iy_away = np.random.poisson(iy_xg_away, n_simulations)
 
+    # Taraf ve İY Sonuçları
     p_sim_ms1 = np.sum(sim_home_goals > sim_away_goals) / n_simulations
     p_sim_ms0 = np.sum(sim_home_goals == sim_away_goals) / n_simulations
     p_sim_ms2 = np.sum(sim_home_goals < sim_away_goals) / n_simulations
@@ -199,7 +196,7 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
     iy_res = np.where(sim_iy_home > sim_iy_away, 1, np.where(sim_iy_home == sim_iy_away, 0, 2))
     ms_res = np.where(sim_home_goals > sim_away_goals, 1, np.where(sim_home_goals == sim_away_goals, 0, 2))
 
-    # Skorsal Matris (0-5 gol arası matris hazırlama)
+    # Skor Matrisi (Poisson / Dixon Coles)
     max_g = 6
     matrix = np.zeros((max_g, max_g))
     for h in range(max_g):
@@ -210,7 +207,7 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
             matrix[h, a] = p_h * p_a * tau
     matrix /= np.sum(matrix)
 
-    # MATCH SUMMARY HEADER
+    # HEADER
     st.markdown("---")
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:14px; padding:15px; border:1px solid #334155; text-align:center; margin-bottom:15px;">
@@ -221,10 +218,9 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
     </div>
     """, unsafe_allow_html=True)
 
-    # 1. VISUAL GRAPHICS (MOBİL BARS & HEATMAP)
-    st.markdown("### 📊 Görsel Analiz & Grafikler")
-
-    # A) TARAF OLASILIKLARI PASTA/BAR GRAFİĞİ
+    # 1. GÖRSEL ANALİZ & GRAFİKLER (PLOTLY)
+    st.markdown("### 📊 Görsel Grafikler")
+    
     fig_prob = go.Figure(data=[
         go.Bar(
             x=[home_name, "Beraberlik", away_name],
@@ -235,37 +231,67 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
         )
     ])
     fig_prob.update_layout(
-        title="Maç Sonucu Olasılık Dağılımı (%)",
-        template="plotly_dark",
-        height=280,
-        margin=dict(l=20, r=20, t=40, b=20),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
+        title="Maç Sonucu Olasılık Dağılımı (%)", template="plotly_dark", height=260,
+        margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig_prob, use_container_width=True)
 
-    # B) SKOR ISI HARİTASI (HEATMAP)
     fig_heatmap = px.imshow(
-        matrix * 100,
-        labels=dict(x=f"{away_name} Gol", y=f"{home_name} Gol", color="Olasılık (%)"),
-        x=[str(i) for i in range(max_g)],
-        y=[str(i) for i in range(max_g)],
-        color_continuous_scale="Viridis",
-        text_auto=".1f"
+        matrix * 100, labels=dict(x=f"{away_name} Gol", y=f"{home_name} Gol", color="Olasılık (%)"),
+        x=[str(i) for i in range(max_g)], y=[str(i) for i in range(max_g)], color_continuous_scale="Viridis", text_auto=".1f"
     )
     fig_heatmap.update_layout(
-        title="Skor Matrisi Isı Haritası (%)",
-        template="plotly_dark",
-        height=330,
-        margin=dict(l=20, r=20, t=40, b=20),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
+        title="Skor Matrisi Isı Haritası (%)", template="plotly_dark", height=320,
+        margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
     st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    # 2. POPÜLER KOMBİNE PAZARLAR (KG VAR & 2.5 ÜST)
-    st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
+    # 2. YALIN GENEL GOL PAZARLARI (1.5, 2.5, 3.5 & KG VAR/YOK) - TEKİL SÜRÜM
+    st.markdown("### ⚽ Genel Gol Pazarları (Tekil/Yalın)")
+    
+    p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
+    p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
+    p_35_ust = np.sum(sim_total_goals > 3.5) / n_simulations
     is_kg_var = (sim_home_goals > 0) & (sim_away_goals > 0)
+    p_kg_var = np.sum(is_kg_var) / n_simulations
+
+    c_g1, c_g2 = st.columns(2)
+    with c_g1:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>1.5 ALT / ÜST</b><br>
+            • Üst: <b style="color:#34d399;">%{p_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_15_ust if p_15_ust>0 else 0:.2f})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_15_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_15_ust) if p_15_ust<1 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>3.5 ALT / ÜST</b><br>
+            • Üst: <b style="color:#34d399;">%{p_35_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_35_ust if p_35_ust>0 else 0:.2f})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_35_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_35_ust) if p_35_ust<1 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c_g2:
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>2.5 ALT / ÜST</b><br>
+            • Üst: <b style="color:#34d399;">%{p_25_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_25_ust if p_25_ust>0 else 0:.2f})</span><br>
+            • Alt: <b style="color:#f87171;">%{(1-p_25_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_25_ust) if p_25_ust<1 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="pro-card">
+            <b>KARŞILIKLI GOL (KG)</b><br>
+            • KG Var: <b style="color:#34d399;">%{p_kg_var*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/p_kg_var if p_kg_var>0 else 0:.2f})</span><br>
+            • KG Yok: <b style="color:#f87171;">%{(1-p_kg_var)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {1/(1-p_kg_var) if p_kg_var<1 else 0:.2f})</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 3. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
+    st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
     is_ust_25 = sim_total_goals > 2.5
     is_ust_15 = sim_total_goals > 1.5
 
@@ -276,45 +302,17 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
 
     m1, m2 = st.columns(2)
     with m1:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-success">POPÜLER</span>
-            <h4 style="margin:5px 0; color:#fff;">KG Var & 2.5 Üst</h4>
-            <h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_ust if p_kg_var_25_ust>0 else 0:.2f}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-success">POPÜLER</span><h4 style="margin:5px 0;">KG Var & 2.5 Üst</h4><h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_ust if p_kg_var_25_ust>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
     with m2:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-primary">KOMBİNE</span>
-            <h4 style="margin:5px 0; color:#fff;">KG Var & 1.5 Üst</h4>
-            <h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_15_ust if p_kg_var_15_ust>0 else 0:.2f}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-primary">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 1.5 Üst</h4><h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_15_ust if p_kg_var_15_ust>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
 
     m3, m4 = st.columns(2)
     with m3:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-warning">KOMBİNE</span>
-            <h4 style="margin:5px 0; color:#fff;">KG Var & 2.5 Alt</h4>
-            <h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_alt if p_kg_var_25_alt>0 else 0:.2f}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-warning">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 2.5 Alt</h4><h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_var_25_alt if p_kg_var_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
     with m4:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-danger">KOMBİNE</span>
-            <h4 style="margin:5px 0; color:#fff;">KG Yok & 2.5 Alt</h4>
-            <h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_yok_25_alt if p_kg_yok_25_alt>0 else 0:.2f}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{1/p_kg_yok_25_alt if p_kg_yok_25_alt>0 else 0:.2f}</b></p></div>""", unsafe_allow_html=True)
 
-    # 3. KELLY KASA DEĞER ANALİZİ
+    # 4. KELLY VALUE BETS
     st.markdown("### 💵 Kelly Value Bet Önerileri")
     def calc_kelly(prob, odds):
         val = (prob * odds) - 1.0
@@ -328,14 +326,11 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
     v2, s2 = calc_kelly(p_sim_ms2, odds_ms2)
 
     k_col1, k_col2, k_col3 = st.columns(3)
-    with k_col1:
-        st.markdown(f"<div class='pro-card'><b>MS 1:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v1>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s1:.0f} ₺</b></div>", unsafe_allow_html=True)
-    with k_col2:
-        st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
-    with k_col3:
-        st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
+    with k_col1: st.markdown(f"<div class='pro-card'><b>MS 1:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v1>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s1:.0f} ₺</b></div>", unsafe_allow_html=True)
+    with k_col2: st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
+    with k_col3: st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
 
-    # 4. İY / MS MATRIX
+    # 5. İY / MS MATRIX
     st.markdown("### 🔄 İY / MS Olasılıkları")
     iy_ms_combos = [
         ("1 / 1", (iy_res == 1) & (ms_res == 1)), ("X / 1", (iy_res == 0) & (ms_res == 1)), ("2 / 1", (iy_res == 2) & (ms_res == 1)),
@@ -349,7 +344,7 @@ if st.button("🔥 ANALİZ ET & GRAFİKLERİ YÜKLE", use_container_width=True):
         with i_cols[idx % 3]:
             st.markdown(f"<div class='pro-card' style='padding:8px; text-align:center;'><b>{lbl}</b><br><span style='color:#34d399;'>%{pr*100:.1f}</span></div>", unsafe_allow_html=True)
 
-    # 5. TAKIM GOL PAZARLARI
+    # 6. TAKIM ÖZEL GOL PAZARLARI
     st.markdown("### ⚽ Takım Özel Golleri")
     tg1, tg2 = st.columns(2)
     with tg1:
