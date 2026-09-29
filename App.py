@@ -53,6 +53,15 @@ st.markdown("""
     .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
 
+    .metric-value-huge {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        background: linear-gradient(90deg, #60a5fa, #3b82f6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
     .stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%) !important;
@@ -112,7 +121,7 @@ with st.sidebar:
 st.markdown("""
 <div style="padding-bottom: 10px;">
     <h1 style="margin:0; font-size: 28px; font-weight: 800; color: #ffffff;">⚽ Professional Football Analytics Engine</h1>
-    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Pratik Veri Girişi ve Otomatik Analiz Sistemi</p>
+    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 14px;">Pratik Veri Girişi ve Detaylı Analiz Sistemi</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -177,7 +186,7 @@ def dixon_coles_tau(h, a, xg_h, xg_a, rho_val):
 
 if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_container_width=True):
     
-    # KORREKTE XG POISSON HESAPLAMASI (GÜÇ ENDEKSLERİ DÜZELTİLDİ)
+    # GÜÇ ENDEKSLERİ VE XG
     home_attack_power = home_att_avg / league_home_xg if league_home_xg > 0 else 1.0
     home_defense_power = home_def_avg / league_home_xg if league_home_xg > 0 else 1.0
     away_attack_power = away_att_avg / league_away_xg if league_away_xg > 0 else 1.0
@@ -187,6 +196,7 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     xg_away = away_attack_power * home_defense_power * league_away_xg
     total_xg = xg_home + xg_away
 
+    # MATRIX HESAPLAMA
     matrix = {}
     for h in range(7):
         for a in range(7):
@@ -198,6 +208,7 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     total_p = sum(matrix.values())
     for k in matrix: matrix[k] /= total_p
 
+    # OLASILIKLAR
     p_ms1 = sum(p for (h, a), p in matrix.items() if h > a)
     p_ms0 = sum(p for (h, a), p in matrix.items() if h == a)
     p_ms2 = sum(p for (h, a), p in matrix.items() if h < a)
@@ -206,14 +217,18 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
     p_ust15 = 1.0 - p_alt15
     p_alt25 = sum(p for (h, a), p in matrix.items() if h + a < 2.5)
     p_ust25 = 1.0 - p_alt25
+    p_alt35 = sum(p for (h, a), p in matrix.items() if h + a < 3.5)
+    p_ust35 = 1.0 - p_alt35
+    
     p_kgvar = sum(p for (h, a), p in matrix.items() if h > 0 and a > 0)
+    p_kgyok = 1.0 - p_kgvar
 
-    # VALUE BET ANALİZİ (GİRİLEN ORANLARLA KARSILASTIRMA)
+    # VALUE BET
     value_ms1 = (p_ms1 * odds_ms1) - 1
     value_ms0 = (p_ms0 * odds_ms0) - 1
     value_ms2 = (p_ms2 * odds_ms2) - 1
 
-    # STRATEJİ BELİRLEME
+    # STRATEJİ
     banko = f"1.5 Gol Üst (%{p_ust15*100:.1f})" if p_ust15 > 0.75 else f"Çifte Şans 1X (%{(p_ms1+p_ms0)*100:.1f})"
     
     if value_ms1 > 0.05:
@@ -246,3 +261,51 @@ if st.button("🔥 MAÇI DETAYLI ANALİZ ET VE MODELİ ÇALIŞTIR", use_containe
         st.markdown(f"""<div class="pro-card"><span class="stat-badge badge-primary">İDEAL / VALUE BET</span><p style="margin-top:8px; font-weight:700;">{ideal}</p></div>""", unsafe_allow_html=True)
     with sc3:
         st.markdown(f"""<div class="pro-card"><span class="stat-badge badge-warning">SÜRPRİZ</span><p style="margin-top:8px; font-weight:700;">{surpriz}</p></div>""", unsafe_allow_html=True)
+
+    # ---------------------------------------------------------
+    # DETAYLI METRİKLER VE İSTATİSTİKLER (EK BÖLÜM)
+    # ---------------------------------------------------------
+    st.markdown("### 📊 Detaylı Olasılık Dağılımları")
+    
+    col_m1, col_m2, col_m3 = st.columns(3)
+
+    # 1. MAÇ SONUCU OLASILIKLARI
+    with col_m1:
+        st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+        st.markdown("#### 🎯 Maç Sonucu (1X2)")
+        st.write(f"**MS 1 ({home_name}):** %{p_ms1*100:.1f} *(Adil Oran: {1/p_ms1:.2f})*")
+        st.write(f"**MS 0 (Beraberlik):** %{p_ms0*100:.1f} *(Adil Oran: {1/p_ms0:.2f})*")
+        st.write(f"**MS 2 ({away_name}):** %{p_ms2*100:.1f} *(Adil Oran: {1/p_ms2:.2f})*")
+        st.markdown("""</div>""", unsafe_allow_html=True)
+
+    # 2. GOL ALT / ÜST OLASILIKLARI
+    with col_m2:
+        st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+        st.markdown("#### ⚽ Alt / Üst Olasılıkları")
+        st.write(f"**1.5 Üst:** %{p_ust15*100:.1f} | **1.5 Alt:** %{p_alt15*100:.1f}")
+        st.write(f"**2.5 Üst:** %{p_ust25*100:.1f} | **2.5 Alt:** %{p_alt25*100:.1f}")
+        st.write(f"**3.5 Üst:** %{p_ust35*100:.1f} | **3.5 Alt:** %{p_alt35*100:.1f}")
+        st.markdown("""</div>""", unsafe_allow_html=True)
+
+    # 3. KARŞILIKLI GOL OLASILIKLARI
+    with col_m3:
+        st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+        st.markdown("#### 🥊 Karşılıklı Gol (KG)")
+        st.write(f"**KG Var:** %{p_kgvar*100:.1f}")
+        st.write(f"**KG Yok:** %{p_kgyok*100:.1f}")
+        st.markdown("""</div>""", unsafe_allow_html=True)
+
+    # 4. EN OLASI SKORLAR
+    st.markdown("### 🎲 En Olası Skor Tahminleri")
+    top_scores = sorted(matrix.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    score_cols = st.columns(5)
+    for idx, ((h, a), prob) in enumerate(top_scores):
+        with score_cols[idx]:
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center; padding:15px;">
+                <span class="stat-badge badge-primary">#{idx+1} Skor</span>
+                <h3 style="margin:10px 0 5px 0; font-size:24px;">{h} - {a}</h3>
+                <p style="margin:0; color:#34d399; font-weight:700;">%{prob*100:.1f}</p>
+            </div>
+            """, unsafe_allow_html=True)
