@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
@@ -11,7 +12,7 @@ st.set_page_config(
     page_title="Pro Football Engine - Ultimate Mobile", 
     page_icon="⚽", 
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ---------------------------------------------------------
@@ -93,7 +94,6 @@ def dixon_coles_tau(h, a, xg_h, xg_a, rho_val, use_dc):
 
 @st.cache_data
 def run_simulation(xg_home, xg_away, rho, use_dc, n_simulations):
-    # Ana Maç Poisson Çekimleri
     raw_home = np.random.poisson(xg_home, n_simulations)
     raw_away = np.random.poisson(xg_away, n_simulations)
     
@@ -117,7 +117,6 @@ def run_simulation(xg_home, xg_away, rho, use_dc, n_simulations):
         sim_home_goals = raw_home
         sim_away_goals = raw_away
 
-    # İlk Yarı Çekimleri (Arka planda %44 sabit xG payı ile)
     iy_ratio = 0.44
     iy_xg_home = xg_home * iy_ratio
     iy_xg_away = xg_away * iy_ratio
@@ -158,358 +157,578 @@ with st.sidebar:
 # ---------------------------------------------------------
 st.markdown("""
 <div style="text-align: center; padding-bottom: 10px;">
-    <h1 style="margin:0; color: #ffffff; font-weight:800;">⚽ Football Analytics Pro</h1>
-    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 13px;">Tüm Detaylı Pazarlar & Mobil Visual Engine</p>
+    <h1 style="margin:0; color: #ffffff; font-weight:800;">⚽ Football Analytics Pro & Geri Dönüş Engine</h1>
+    <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 13px;">Monte Carlo Dixon-Coles + Pace Metriği + Nokta Oran & İY/MS Potansiyeli</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# INPUT FORM
+# NAVIGATION TABS
 # ---------------------------------------------------------
-st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
-st.markdown("""<span class="stat-badge badge-primary">Giriş Paneli</span>""", unsafe_allow_html=True)
+tab1, tab2, tab3 = st.tabs([
+    "📊 Tekil Maç Analizi (Monte Carlo + Pace + İY/MS)",
+    "📁 Toplu Bülten Taraması (CSV)",
+    "📚 1.000 Maçlık Referans Trendler & Nokta Oranlar"
+])
 
-col_h, col_a = st.columns(2)
+# =========================================================
+# TAB 1: TEKİL MAÇ ANALİZİ
+# =========================================================
+with tab1:
+    st.markdown("""<div class="pro-card">""", unsafe_allow_html=True)
+    st.markdown("""<span class="stat-badge badge-primary">Giriş Paneli & Metrikler</span>""", unsafe_allow_html=True)
 
-with col_h:
-    st.markdown("##### 🏠 Ev Sahibi")
-    home_name = st.text_input("Takım", value="Beşiktaş")
-    home_matches = st.number_input("Maç", min_value=1, value=10)
-    home_goals_scored = st.number_input("Attığı", min_value=0, value=20)
-    home_goals_conceded = st.number_input("Yediği", min_value=0, value=8)
-    home_missing = st.slider("Ev Eksik Etkisi %", 0, 30, 0, step=5)
+    col_h, col_a = st.columns(2)
 
-with col_a:
-    st.markdown("##### ✈️ Deplasman")
-    away_name = st.text_input("Takım ", value="Trabzonspor")
-    away_matches = st.number_input("Maç ", min_value=1, value=10)
-    away_goals_scored = st.number_input("Attığı ", min_value=0, value=14)
-    away_goals_conceded = st.number_input("Yediği ", min_value=0, value=13)
-    away_missing = st.slider("Dep Eksik Etkisi %", 0, 30, 0, step=5)
-
-home_att_avg = (home_goals_scored / home_matches) * (1 - (home_missing / 100))
-home_def_avg = (home_goals_conceded / home_matches) * (1 + (home_missing / 200))
-away_att_avg = (away_goals_scored / away_matches) * (1 - (away_missing / 100))
-away_def_avg = (away_goals_conceded / away_matches) * (1 + (away_missing / 200))
-
-st.markdown("##### 💰 Oranlar")
-col_o1, col_o2, col_o3 = st.columns(3)
-with col_o1: odds_ms1 = st.number_input("MS 1", min_value=1.0, value=2.10, step=0.05)
-with col_o2: odds_ms0 = st.number_input("MS 0", min_value=1.0, value=3.25, step=0.05)
-with col_o3: odds_ms2 = st.number_input("MS 2", min_value=1.0, value=3.10, step=0.05)
-
-st.markdown("""</div>""", unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# EXECUTION
-# ---------------------------------------------------------
-if st.button("🔥 TÜM ANALİZLERİ VE GRAFİKLERİ HESAPLA", use_container_width=True):
-    
-    # xG Hesapları
-    home_attack_power = home_att_avg / league_home_xg if league_home_xg > 0 else 1.0
-    home_defense_power = home_def_avg / league_home_xg if league_home_xg > 0 else 1.0
-    away_attack_power = away_att_avg / league_away_xg if league_away_xg > 0 else 1.0
-    away_defense_power = away_def_avg / league_away_xg if league_away_xg > 0 else 1.0
-
-    xg_home = home_attack_power * away_defense_power * league_home_xg
-    xg_away = away_attack_power * home_defense_power * league_away_xg
-    total_xg = xg_home + xg_away
-
-    # Cache'lenmiş Simülasyon Motorunu Çalıştır
-    sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away = run_simulation(
-        xg_home, xg_away, rho, use_dixon_coles, n_simulations
-    )
-
-    sim_total_goals = sim_home_goals + sim_away_goals
-    sim_iy_total = sim_iy_home + sim_iy_away
-
-    # Taraf ve İY Sonuçları
-    p_sim_ms1 = np.sum(sim_home_goals > sim_away_goals) / n_simulations
-    p_sim_ms0 = np.sum(sim_home_goals == sim_away_goals) / n_simulations
-    p_sim_ms2 = np.sum(sim_home_goals < sim_away_goals) / n_simulations
-
-    p_iy1 = np.sum(sim_iy_home > sim_iy_away) / n_simulations
-    p_iy0 = np.sum(sim_iy_home == sim_iy_away) / n_simulations
-    p_iy2 = np.sum(sim_iy_home < sim_iy_away) / n_simulations
-
-    iy_res = np.where(sim_iy_home > sim_iy_away, 1, np.where(sim_iy_home == sim_iy_away, 0, 2))
-    ms_res = np.where(sim_home_goals > sim_away_goals, 1, np.where(sim_home_goals == sim_away_goals, 0, 2))
-
-    # Analitik Skor Matrisi
-    max_g = 6
-    matrix = np.zeros((max_g, max_g))
-    scores_dict = {}
-    for h in range(max_g):
-        for a in range(max_g):
-            p_h = (math.pow(xg_home, h) * math.exp(-xg_home)) / math.factorial(h)
-            p_a = (math.pow(xg_away, a) * math.exp(-xg_away)) / math.factorial(a)
-            tau = dixon_coles_tau(h, a, xg_home, xg_away, rho, use_dixon_coles)
-            prob = p_h * p_a * tau
-            matrix[h, a] = prob
-            scores_dict[f"{h}-{a}"] = prob
-
-    # HEADER
-    st.markdown("---")
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:14px; padding:15px; border:1px solid #334155; text-align:center; margin-bottom:15px;">
-        <h2 style="margin:0; color:#ffffff;">{home_name.upper()} vs {away_name.upper()}</h2>
-        <p style="color:#94a3b8; font-size:13px; margin:5px 0 0 0;">
-            xG: <b style="color:#38bdf8;">{xg_home:.2f}</b> - <b style="color:#f43f5e;">{xg_away:.2f}</b> | Toplam: <b style="color:#34d399;">{total_xg:.2f}</b>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 1. GÖRSEL ANALİZ & GRAFİKLER
-    st.markdown("### 📊 Görsel Grafikler")
-    
-    fig_prob = go.Figure(data=[
-        go.Bar(
-            x=[home_name, "Beraberlik", away_name],
-            y=[p_sim_ms1*100, p_sim_ms0*100, p_sim_ms2*100],
-            text=[f"%{p_sim_ms1*100:.1f}", f"%{p_sim_ms0*100:.1f}", f"%{p_sim_ms2*100:.1f}"],
-            textposition='auto',
-            marker_color=['#3b82f6', '#f59e0b', '#ef4444']
+    with col_h:
+        st.markdown("##### 🏠 Ev Sahibi")
+        home_name = st.text_input("Takım", value="Beşiktaş", key="home_name")
+        home_matches = st.number_input("Maç", min_value=1, value=10, key="home_m")
+        home_goals_scored = st.number_input("Attığı Gol", min_value=0, value=20, key="home_gs")
+        home_goals_conceded = st.number_input("Yediği Gol", min_value=0, value=8, key="home_gc")
+        home_pace = st.number_input("Tempo (Pace)", min_value=40.0, max_value=100.0, value=68.0, step=1.0, help="Takımın maç başına ortalama zilyetlik/hücum temposu", key="home_pace")
+        home_missing = st.slider("Ev Eksik Etkisi %", 0, 30, 0, step=5, key="home_miss")
+        home_son_iki = st.selectbox(
+            "Ev Sahibi Son 2 Maç Dizilimi",
+            ["2-1 -> 1-0", "2-0 -> 2-1", "1-1 -> 2-1", "1-0 -> 2-0", "3-1 -> 2-0", "Diğer / Uymuyor"],
+            key="home_son_2"
         )
-    ])
-    fig_prob.update_layout(
-        title="Maç Sonucu Olasılık Dağılımı (%)", template="plotly_dark", height=260,
-        margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-    )
-    st.plotly_chart(fig_prob, use_container_width=True)
 
-    fig_heatmap = px.imshow(
-        matrix * 100, labels=dict(x=f"{away_name} Gol", y=f"{home_name} Gol", color="Olasılık (%)"),
-        x=[str(i) for i in range(max_g)], y=[str(i) for i in range(max_g)], color_continuous_scale="Viridis", text_auto=".1f"
-    )
-    fig_heatmap.update_layout(
-        title="Skor Matrisi Isı Haritası (%)", template="plotly_dark", height=320,
-        margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-    )
-    st.plotly_chart(fig_heatmap, use_container_width=True)
+    with col_a:
+        st.markdown("##### ✈️ Deplasman")
+        away_name = st.text_input("Takım ", value="Trabzonspor", key="away_name")
+        away_matches = st.number_input("Maç ", min_value=1, value=10, key="away_m")
+        away_goals_scored = st.number_input("Attığı Gol ", min_value=0, value=14, key="away_gs")
+        away_goals_conceded = st.number_input("Yediği Gol ", min_value=0, value=13, key="away_gc")
+        away_pace = st.number_input("Tempo (Pace) ", min_value=40.0, max_value=100.0, value=62.0, step=1.0, help="Deplasman ekibinin tempo metriği", key="away_pace")
+        away_missing = st.slider("Dep Eksik Etkisi %", 0, 30, 0, step=5, key="away_miss")
+        away_son_iki = st.selectbox(
+            "Deplasman Son 2 Maç Dizilimi",
+            ["1-2 -> 0-1", "0-2 -> 1-2", "1-1 -> 1-2", "0-1 -> 0-2", "1-3 -> 0-2", "Diğer / Uymuyor"],
+            key="away_son_2"
+        )
 
-    # 2. EN YÜKSEK OLASILIKLI SKORLAR (TOP 5)
-    st.markdown("### 🎯 En Yüksek Olasılıklı 5 Skor")
-    sorted_scores = sorted(scores_dict.items(), key=lambda item: item[1], reverse=True)[:5]
-    sc_cols = st.columns(5)
-    for idx, (sc_name, sc_prob) in enumerate(sorted_scores):
-        sc_pct = sc_prob * 100
-        sc_fair = get_fair_odds(sc_prob)
-        with sc_cols[idx]:
+    home_att_avg = (home_goals_scored / home_matches) * (1 - (home_missing / 100))
+    home_def_avg = (home_goals_conceded / home_matches) * (1 + (home_missing / 200))
+    away_att_avg = (away_goals_scored / away_matches) * (1 - (away_missing / 100))
+    away_def_avg = (away_goals_conceded / away_matches) * (1 + (away_missing / 200))
+
+    st.markdown("##### 💰 Oranlar & İY/MS Dönüş Oranları")
+    col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns(5)
+    with col_o1: odds_ms1 = st.number_input("MS 1", min_value=1.0, value=1.50, step=0.05, key="o_ms1")
+    with col_o2: odds_ms0 = st.number_input("MS 0", min_value=1.0, value=3.60, step=0.05, key="o_ms0")
+    with col_o3: odds_ms2 = st.number_input("MS 2", min_value=1.0, value=5.50, step=0.05, key="o_ms2")
+    with col_o4: odds_21 = st.number_input("2/1 Oranı (İY2/MS1)", min_value=1.0, value=21.00, step=0.50, key="o_21")
+    with col_o5: odds_12 = st.number_input("1/2 Oranı (İY1/MS2)", min_value=1.0, value=25.00, step=0.50, key="o_12")
+
+    st.markdown("""</div>""", unsafe_allow_html=True)
+
+    if st.button("🔥 TÜM ANALİZLERİ, PACE & HESAPLAMALARI ÇALIŞTIR", use_container_width=True):
+        
+        # xG & Pace Hesapları
+        home_attack_power = home_att_avg / league_home_xg if league_home_xg > 0 else 1.0
+        home_defense_power = home_def_avg / league_home_xg if league_home_xg > 0 else 1.0
+        away_attack_power = away_att_avg / league_away_xg if league_away_xg > 0 else 1.0
+        away_defense_power = away_def_avg / league_away_xg if league_away_xg > 0 else 1.0
+
+        xg_home = home_attack_power * away_defense_power * league_home_xg
+        xg_away = away_attack_power * home_defense_power * league_away_xg
+        total_xg = xg_home + xg_away
+        exp_pace = (home_pace + away_pace) / 2.0
+
+        # Monte Carlo Simülasyon
+        sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away = run_simulation(
+            xg_home, xg_away, rho, use_dixon_coles, n_simulations
+        )
+
+        sim_total_goals = sim_home_goals + sim_away_goals
+        sim_iy_total = sim_iy_home + sim_iy_away
+
+        # Taraf & İY Sonuçları
+        p_sim_ms1 = np.sum(sim_home_goals > sim_away_goals) / n_simulations
+        p_sim_ms0 = np.sum(sim_home_goals == sim_away_goals) / n_simulations
+        p_sim_ms2 = np.sum(sim_home_goals < sim_away_goals) / n_simulations
+
+        p_iy1 = np.sum(sim_iy_home > sim_iy_away) / n_simulations
+        p_iy0 = np.sum(sim_iy_home == sim_iy_away) / n_simulations
+        p_iy2 = np.sum(sim_iy_home < sim_iy_away) / n_simulations
+
+        iy_res = np.where(sim_iy_home > sim_iy_away, 1, np.where(sim_iy_home == sim_iy_away, 0, 2))
+        ms_res = np.where(sim_home_goals > sim_away_goals, 1, np.where(sim_home_goals == sim_away_goals, 0, 2))
+
+        # Skor Matrisi
+        max_g = 6
+        matrix = np.zeros((max_g, max_g))
+        scores_dict = {}
+        for h in range(max_g):
+            for a in range(max_g):
+                p_h = (math.pow(xg_home, h) * math.exp(-xg_home)) / math.factorial(h)
+                p_a = (math.pow(xg_away, a) * math.exp(-xg_away)) / math.factorial(a)
+                tau = dixon_coles_tau(h, a, xg_home, xg_away, rho, use_dixon_coles)
+                prob = p_h * p_a * tau
+                matrix[h, a] = prob
+                scores_dict[f"{h}-{a}"] = prob
+
+        # -----------------------------------------------------
+        # İY / MS GERİ DÖNÜŞ (2/1 VE 1/2) PUANLAMA MODÜLÜ
+        # -----------------------------------------------------
+        # 2/1 Potansiyel Puanı
+        puan_21 = 0
+        sebepler_21 = []
+        if (18.50 <= odds_21 <= 24.50) or (1.30 <= odds_ms1 <= 1.65):
+            puan_21 += 30
+            sebepler_21.append(f"Nokta Oran Bandı Uyumlu (2/1 Oranı: {odds_21} | MS1: {odds_ms1})")
+        if exp_pace >= 64.0 and xg_home >= 1.6:
+            puan_21 += 30
+            sebepler_21.append(f"Yüksek Beklenen Tempo ({exp_pace:.1f}) ve Ev Hücum Gücü (xG: {xg_home:.2f})")
+        if home_def_avg >= 1.0:
+            puan_21 += 15
+            sebepler_21.append(f"Ev Sahibi Kalesini Kapatmakta Zorlanıyor (Yediği Gol Ort: {home_def_avg:.2f})")
+        if home_son_iki != "Diğer / Uymuyor":
+            puan_21 += 25
+            sebepler_21.append(f"Önceki 2 Maç Dizilimi Tarihsel 2/1 Trendiyle Eşleşiyor ({home_son_iki})")
+
+        # 1/2 Potansiyel Puanı
+        puan_12 = 0
+        sebepler_12 = []
+        if (18.50 <= odds_12 <= 28.00) or (1.30 <= odds_ms2 <= 1.85):
+            puan_12 += 30
+            sebepler_12.append(f"Nokta Oran Bandı Uyumlu (1/2 Oranı: {odds_12} | MS2: {odds_ms2})")
+        if exp_pace >= 64.0 and xg_away >= 1.4:
+            puan_12 += 30
+            sebepler_12.append(f"Yüksek Beklenen Tempo ({exp_pace:.1f}) ve Deplasman Hücum Gücü (xG: {xg_away:.2f})")
+        if away_def_avg >= 1.0:
+            puan_12 += 15
+            sebepler_12.append(f"Deplasman Ekibi Gol Yeme Eğiliminde (Yediği Gol Ort: {away_def_avg:.2f})")
+        if away_son_iki != "Diğer / Uymuyor":
+            puan_12 += 25
+            sebepler_12.append(f"Önceki 2 Maç Dizilimi Tarihsel 1/2 Trendiyle Eşleşiyor ({away_son_iki})")
+
+        # HEADER & TEMPO / xG METRİKLERİ
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius:14px; padding:15px; border:1px solid #334155; text-align:center; margin-bottom:15px;">
+            <h2 style="margin:0; color:#ffffff;">{home_name.upper()} vs {away_name.upper()}</h2>
+            <p style="color:#94a3b8; font-size:13px; margin:5px 0 0 0;">
+                xG Beklentisi: <b style="color:#38bdf8;">{xg_home:.2f}</b> - <b style="color:#f43f5e;">{xg_away:.2f}</b> | Toplam xG: <b style="color:#34d399;">{total_xg:.2f}</b> | Beklenen Tempo (Pace): <b style="color:#fbbf24;">{exp_pace:.1f}</b>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # GERİ DÖNÜŞ (2/1 VE 1/2) MODÜLÜ BİLGİ KARTLARI
+        st.markdown("### 🔄 İY/MS Geri Dönüş (2/1 ve 1/2) Potansiyel Analizi")
+        gd_col1, gd_col2 = st.columns(2)
+        with gd_col1:
             st.markdown(f"""
-            <div class="pro-card" style="text-align:center;">
-                <b style="font-size:16px; color:#38bdf8;">{sc_name}</b><br>
-                <span style="color:#34d399;">%{sc_pct:.1f}</span><br>
-                <span style="font-size:11px; color:#94a3b8;">Adil: {sc_fair}</span>
+            <div class="pro-card">
+                <h4>🎯 2/1 (İY2 / MS1) Potansiyeli: <span style="color:#34d399;">%{puan_21}</span></h4>
+            </div>
+            """, unsafe_allow_html=True)
+            if puan_21 >= 75:
+                st.success("🔥 **GÜÇLÜ 2/1 ADAYI:** Maç hem Pace/xG metriklerini hem de Oran/Skor dizilimi filtrelerini tam karşılıyor.")
+            elif puan_21 >= 50:
+                st.warning("⚠️ **ORTA SEVİYE ADAY:** Temel kriterlerin bir kısmı uyuyor, sistem/sürpriz kuponlarda değerlendirilebilir.")
+            else:
+                st.error("❌ **DÜŞÜK POTANSİYEL:** Maçın 2/1 bitme ihtimali istatistiksel ve oransal açıdan zayıf.")
+            for s in sebepler_21:
+                st.write(f"- ✅ {s}")
+
+        with gd_col2:
+            st.markdown(f"""
+            <div class="pro-card">
+                <h4>🎯 1/2 (İY1 / MS2) Potansiyeli: <span style="color:#60a5fa;">%{puan_12}</span></h4>
+            </div>
+            """, unsafe_allow_html=True)
+            if puan_12 >= 75:
+                st.success("🔥 **GÜÇLÜ 1/2 ADAYI:** Deplasman galibiyeti ve İY1 şok başlangıç parametreleri yüksek.")
+            elif puan_12 >= 50:
+                st.warning("⚠️ **ORTA SEVİYE ADAY:** Sürpriz kuponlar için takibe alınabilir.")
+            else:
+                st.error("❌ **DÜŞÜK POTANSİYEL:** Maçın 1/2 bitme ihtimali zayıf.")
+            for s in sebepler_12:
+                st.write(f"- ✅ {s}")
+
+        # 1. GÖRSEL ANALİZ & GRAFİKLER
+        st.markdown("### 📊 Görsel Grafikler")
+        fig_prob = go.Figure(data=[
+            go.Bar(
+                x=[home_name, "Beraberlik", away_name],
+                y=[p_sim_ms1*100, p_sim_ms0*100, p_sim_ms2*100],
+                text=[f"%{p_sim_ms1*100:.1f}", f"%{p_sim_ms0*100:.1f}", f"%{p_sim_ms2*100:.1f}"],
+                textposition='auto',
+                marker_color=['#3b82f6', '#f59e0b', '#ef4444']
+            )
+        ])
+        fig_prob.update_layout(
+            title="Maç Sonucu Olasılık Dağılımı (%)", template="plotly_dark", height=260,
+            margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig_prob, use_container_width=True)
+
+        fig_heatmap = px.imshow(
+            matrix * 100, labels=dict(x=f"{away_name} Gol", y=f"{home_name} Gol", color="Olasılık (%)"),
+            x=[str(i) for i in range(max_g)], y=[str(i) for i in range(max_g)], color_continuous_scale="Viridis", text_auto=".1f"
+        )
+        fig_heatmap.update_layout(
+            title="Skor Matrisi Isı Haritası (%)", template="plotly_dark", height=320,
+            margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+
+        # 2. EN YÜKSEK OLASILIKLI SKORLAR (TOP 5)
+        st.markdown("### 🎯 En Yüksek Olasılıklı 5 Skor")
+        sorted_scores = sorted(scores_dict.items(), key=lambda item: item[1], reverse=True)[:5]
+        sc_cols = st.columns(5)
+        for idx, (sc_name, sc_prob) in enumerate(sorted_scores):
+            sc_pct = sc_prob * 100
+            sc_fair = get_fair_odds(sc_prob)
+            with sc_cols[idx]:
+                st.markdown(f"""
+                <div class="pro-card" style="text-align:center;">
+                    <b style="font-size:16px; color:#38bdf8;">{sc_name}</b><br>
+                    <span style="color:#34d399;">%{sc_pct:.1f}</span><br>
+                    <span style="font-size:11px; color:#94a3b8;">Adil: {sc_fair}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # 3. ÇİFTE ŞANS & ASYA HANDİKAP
+        st.markdown("### 🛡️ Çifte Şans & Asya Handikap")
+        p_1x = p_sim_ms1 + p_sim_ms0
+        p_12 = p_sim_ms1 + p_sim_ms2
+        p_x2 = p_sim_ms0 + p_sim_ms2
+
+        p_ah_h_minus_15 = np.sum((sim_home_goals - sim_away_goals) > 1.5) / n_simulations
+        p_ah_a_plus_15 = 1.0 - p_ah_h_minus_15
+
+        cs1, cs2 = st.columns(2)
+        with cs1:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>ÇİFTE ŞANS</b><br>
+                • 1X: <b style="color:#34d399;">%{p_1x*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_1x)})</span><br>
+                • 12: <b style="color:#34d399;">%{p_12*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_12)})</span><br>
+                • X2: <b style="color:#34d399;">%{p_x2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_x2)})</span>
+            </div>
+            """, unsafe_allow_html=True)
+        with cs2:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>ASYA HANDİKAP (1.5)</b><br>
+                • {home_name} -1.5: <b style="color:#60a5fa;">%{p_ah_h_minus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_h_minus_15)})</span><br>
+                • {away_name} +1.5: <b style="color:#34d399;">%{p_ah_a_plus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_a_plus_15)})</span>
             </div>
             """, unsafe_allow_html=True)
 
-    # 3. ÇİFTE ŞANS & ASYA HANDİKAP
-    st.markdown("### 🛡️ Çifte Şans & Asya Handikap")
-    p_1x = p_sim_ms1 + p_sim_ms0
-    p_12 = p_sim_ms1 + p_sim_ms2
-    p_x2 = p_sim_ms0 + p_sim_ms2
+        # 4. İLK YARI PAZARLARI
+        st.markdown("### ⏱️ İlk Yarı (İY) Pazarları")
+        p_iy_05_ust = np.sum(sim_iy_total > 0.5) / n_simulations
+        p_iy_15_ust = np.sum(sim_iy_total > 1.5) / n_simulations
 
-    p_ah_h_minus_15 = np.sum((sim_home_goals - sim_away_goals) > 1.5) / n_simulations
-    p_ah_a_plus_15 = 1.0 - p_ah_h_minus_15
+        iy_c1, iy_c2 = st.columns(2)
+        with iy_c1:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>İY TARAF SONUCU</b><br>
+                • İY 1: <b>%{p_iy1*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy1)})</span><br>
+                • İY X: <b>%{p_iy0*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy0)})</span><br>
+                • İY 2: <b>%{p_iy2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy2)})</span>
+            </div>
+            """, unsafe_allow_html=True)
+        with iy_c2:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>İY GOL PAZARLARI</b><br>
+                • İY 0.5 Üst: <b style="color:#34d399;">%{p_iy_05_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_05_ust)})</span><br>
+                • İY 1.5 Üst: <b style="color:#60a5fa;">%{p_iy_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_15_ust)})</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    cs1, cs2 = st.columns(2)
-    with cs1:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>ÇİFTE ŞANS</b><br>
-            • 1X: <b style="color:#34d399;">%{p_1x*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_1x)})</span><br>
-            • 12: <b style="color:#34d399;">%{p_12*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_12)})</span><br>
-            • X2: <b style="color:#34d399;">%{p_x2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_x2)})</span>
-        </div>
-        """, unsafe_allow_html=True)
-    with cs2:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>ASYA HANDİKAP (1.5)</b><br>
-            • {home_name} -1.5: <b style="color:#60a5fa;">%{p_ah_h_minus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_h_minus_15)})</span><br>
-            • {away_name} +1.5: <b style="color:#34d399;">%{p_ah_a_plus_15*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_ah_a_plus_15)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+        # 5. GENEL GOL PAZARLARI
+        st.markdown("### ⚽ Genel Gol Pazarları")
+        p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
+        p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
+        p_35_ust = np.sum(sim_total_goals > 3.5) / n_simulations
+        is_kg_var = (sim_home_goals > 0) & (sim_away_goals > 0)
+        p_kg_var = np.sum(is_kg_var) / n_simulations
 
-    # 4. İLK YARI (İY) PAZARLARI
-    st.markdown("### ⏱️ İlk Yarı (İY) Pazarları")
-    p_iy_05_ust = np.sum(sim_iy_total > 0.5) / n_simulations
-    p_iy_15_ust = np.sum(sim_iy_total > 1.5) / n_simulations
+        c_g1, c_g2 = st.columns(2)
+        with c_g1:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>1.5 ALT / ÜST</b><br>
+                • Üst: <b style="color:#34d399;">%{p_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_15_ust)})</span><br>
+                • Alt: <b style="color:#f87171;">%{(1-p_15_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_15_ust)})</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    iy_c1, iy_c2 = st.columns(2)
-    with iy_c1:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>İY TARAF SONUCU</b><br>
-            • İY 1: <b>%{p_iy1*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy1)})</span><br>
-            • İY X: <b>%{p_iy0*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy0)})</span><br>
-            • İY 2: <b>%{p_iy2*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy2)})</span>
-        </div>
-        """, unsafe_allow_html=True)
-    with iy_c2:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>İY GOL PAZARLARI</b><br>
-            • İY 0.5 Üst: <b style="color:#34d399;">%{p_iy_05_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_05_ust)})</span><br>
-            • İY 1.5 Üst: <b style="color:#60a5fa;">%{p_iy_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_iy_15_ust)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>3.5 ALT / ÜST</b><br>
+                • Üst: <b style="color:#34d399;">%{p_35_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_35_ust)})</span><br>
+                • Alt: <b style="color:#f87171;">%{(1-p_35_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_35_ust)})</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # 5. YALIN GENEL GOL PAZARLARI
-    st.markdown("### ⚽ Genel Gol Pazarları (Tekil)")
-    p_15_ust = np.sum(sim_total_goals > 1.5) / n_simulations
-    p_25_ust = np.sum(sim_total_goals > 2.5) / n_simulations
-    p_35_ust = np.sum(sim_total_goals > 3.5) / n_simulations
-    is_kg_var = (sim_home_goals > 0) & (sim_away_goals > 0)
-    p_kg_var = np.sum(is_kg_var) / n_simulations
+        with c_g2:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>2.5 ALT / ÜST</b><br>
+                • Üst: <b style="color:#34d399;">%{p_25_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_25_ust)})</span><br>
+                • Alt: <b style="color:#f87171;">%{(1-p_25_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_25_ust)})</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    c_g1, c_g2 = st.columns(2)
-    with c_g1:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>1.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_15_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_15_ust)})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_15_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_15_ust)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>KARŞILIKLI GOL (KG)</b><br>
+                • KG Var: <b style="color:#34d399;">%{p_kg_var*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_kg_var)})</span><br>
+                • KG Yok: <b style="color:#f87171;">%{(1-p_kg_var)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_kg_var)})</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>3.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_35_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_35_ust)})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_35_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_35_ust)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+        # 6. TOPLAM GOL ARALIĞI (TGA)
+        st.markdown("### 📊 Toplam Gol Aralığı (TGA)")
+        p_tg_01 = np.sum((sim_total_goals >= 0) & (sim_total_goals <= 1)) / n_simulations
+        p_tg_23 = np.sum((sim_total_goals >= 2) & (sim_total_goals <= 3)) / n_simulations
+        p_tg_45 = np.sum((sim_total_goals >= 4) & (sim_total_goals <= 5)) / n_simulations
+        p_tg_6plus = np.sum(sim_total_goals >= 6) / n_simulations
 
-    with c_g2:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>2.5 ALT / ÜST</b><br>
-            • Üst: <b style="color:#34d399;">%{p_25_ust*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_25_ust)})</span><br>
-            • Alt: <b style="color:#f87171;">%{(1-p_25_ust)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_25_ust)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+        tg_c1, tg_c2 = st.columns(2)
+        with tg_c1:
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center;">
+                <span class="stat-badge badge-warning">0 - 1 GOL</span>
+                <h3 style="margin:5px 0; color:#fbbf24;">%{p_tg_01*100:.1f}</h3>
+                <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_01)}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>KARŞILIKLI GOL (KG)</b><br>
-            • KG Var: <b style="color:#34d399;">%{p_kg_var*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(p_kg_var)})</span><br>
-            • KG Yok: <b style="color:#f87171;">%{(1-p_kg_var)*100:.1f}</b> <span style="font-size:11px; color:#94a3b8;">(Adil: {get_fair_odds(1-p_kg_var)})</span>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center;">
+                <span class="stat-badge badge-primary">4 - 5 GOL</span>
+                <h3 style="margin:5px 0; color:#60a5fa;">%{p_tg_45*100:.1f}</h3>
+                <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_45)}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # 6. TOPLAM GOL ARALIĞI (TGA) PAZARLARI
-    st.markdown("### 📊 Toplam Gol Aralığı (TGA)")
-    p_tg_01 = np.sum((sim_total_goals >= 0) & (sim_total_goals <= 1)) / n_simulations
-    p_tg_23 = np.sum((sim_total_goals >= 2) & (sim_total_goals <= 3)) / n_simulations
-    p_tg_45 = np.sum((sim_total_goals >= 4) & (sim_total_goals <= 5)) / n_simulations
-    p_tg_6plus = np.sum(sim_total_goals >= 6) / n_simulations
+        with tg_c2:
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center;">
+                <span class="stat-badge badge-success">2 - 3 GOL</span>
+                <h3 style="margin:5px 0; color:#34d399;">%{p_tg_23*100:.1f}</h3>
+                <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_23)}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
 
-    tg_c1, tg_c2 = st.columns(2)
-    with tg_c1:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-warning">0 - 1 GOL</span>
-            <h3 style="margin:5px 0; color:#fbbf24;">%{p_tg_01*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_01)}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="pro-card" style="text-align:center;">
+                <span class="stat-badge badge-danger">6+ GOL</span>
+                <h3 style="margin:5px 0; color:#f87171;">%{p_tg_6plus*100:.1f}</h3>
+                <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_6plus)}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-primary">4 - 5 GOL</span>
-            <h3 style="margin:5px 0; color:#60a5fa;">%{p_tg_45*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_45)}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        # 7. KOMBİNE PAZARLAR
+        st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
+        is_ust_25 = sim_total_goals > 2.5
+        is_ust_15 = sim_total_goals > 1.5
 
-    with tg_c2:
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-success">2 - 3 GOL</span>
-            <h3 style="margin:5px 0; color:#34d399;">%{p_tg_23*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_23)}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        p_kg_var_25_ust = np.sum(is_kg_var & is_ust_25) / n_simulations
+        p_kg_var_15_ust = np.sum(is_kg_var & is_ust_15) / n_simulations
+        p_kg_var_25_alt = np.sum(is_kg_var & (~is_ust_25)) / n_simulations
+        p_kg_yok_25_alt = np.sum((~is_kg_var) & (~is_ust_25)) / n_simulations
 
-        st.markdown(f"""
-        <div class="pro-card" style="text-align:center;">
-            <span class="stat-badge badge-danger">6+ GOL</span>
-            <h3 style="margin:5px 0; color:#f87171;">%{p_tg_6plus*100:.1f}</h3>
-            <p style="margin:0; color:#94a3b8; font-size:12px;">Adil Oran: <b>{get_fair_odds(p_tg_6plus)}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+        m1, m2 = st.columns(2)
+        with m1:
+            st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-success">POPÜLER</span><h4 style="margin:5px 0;">KG Var & 2.5 Üst</h4><h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_ust)}</b></p></div>""", unsafe_allow_html=True)
+        with m2:
+            st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-primary">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 1.5 Üst</h4><h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_15_ust)}</b></p></div>""", unsafe_allow_html=True)
 
-    # 7. KOMBİNE KG VAR & ALT/ÜST PAZARLARI
-    st.markdown("### 🔥 KG Var & Alt/Üst Kombinasyonları")
-    is_ust_25 = sim_total_goals > 2.5
-    is_ust_15 = sim_total_goals > 1.5
+        m3, m4 = st.columns(2)
+        with m3:
+            st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-warning">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 2.5 Alt</h4><h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_alt)}</b></p></div>""", unsafe_allow_html=True)
+        with m4:
+            st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_yok_25_alt)}</b></p></div>""", unsafe_allow_html=True)
 
-    p_kg_var_25_ust = np.sum(is_kg_var & is_ust_25) / n_simulations
-    p_kg_var_15_ust = np.sum(is_kg_var & is_ust_15) / n_simulations
-    p_kg_var_25_alt = np.sum(is_kg_var & (~is_ust_25)) / n_simulations
-    p_kg_yok_25_alt = np.sum((~is_kg_var) & (~is_ust_25)) / n_simulations
+        # 8. KELLY VALUE BETS
+        st.markdown("### 💵 Kelly Value Bet Önerileri")
+        def calc_kelly(prob, odds):
+            val = (prob * odds) - 1.0
+            if val <= 0: return 0.0, 0.0
+            b = odds - 1.0
+            fk = ((prob * b) - (1.0 - prob)) / b * 0.25
+            return val, bankroll * max(0.0, fk)
 
-    m1, m2 = st.columns(2)
-    with m1:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-success">POPÜLER</span><h4 style="margin:5px 0;">KG Var & 2.5 Üst</h4><h2 style="margin:2px 0; color:#34d399;">%{p_kg_var_25_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_ust)}</b></p></div>""", unsafe_allow_html=True)
-    with m2:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-primary">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 1.5 Üst</h4><h2 style="margin:2px 0; color:#60a5fa;">%{p_kg_var_15_ust*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_15_ust)}</b></p></div>""", unsafe_allow_html=True)
+        v1, s1 = calc_kelly(p_sim_ms1, odds_ms1)
+        v0, s0 = calc_kelly(p_sim_ms0, odds_ms0)
+        v2, s2 = calc_kelly(p_sim_ms2, odds_ms2)
 
-    m3, m4 = st.columns(2)
-    with m3:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-warning">KOMBİNE</span><h4 style="margin:5px 0;">KG Var & 2.5 Alt</h4><h2 style="margin:2px 0; color:#fbbf24;">%{p_kg_var_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_var_25_alt)}</b></p></div>""", unsafe_allow_html=True)
-    with m4:
-        st.markdown(f"""<div class="pro-card" style="text-align:center;"><span class="stat-badge badge-danger">KOMBİNE</span><h4 style="margin:5px 0;">KG Yok & 2.5 Alt</h4><h2 style="margin:2px 0; color:#f87171;">%{p_kg_yok_25_alt*100:.1f}</h2><p style="margin:0; color:#94a3b8; font-size:12px;">Adil: <b>{get_fair_odds(p_kg_yok_25_alt)}</b></p></div>""", unsafe_allow_html=True)
+        k_col1, k_col2, k_col3 = st.columns(3)
+        with k_col1: st.markdown(f"<div class='pro-card'><b>MS 1:</b> {'<span class=\"stat-badge badge-success\">DEĞERLİ</span>' if v1>0 else '<span class=\"stat-badge badge-danger\">PAS</span>'}<br>Öneri: <b>{s1:.0f} ₺</b></div>", unsafe_allow_html=True)
+        with k_col2: st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"stat-badge badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"stat-badge badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
+        with k_col3: st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"stat-badge badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"stat-badge badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
 
-    # 8. KELLY VALUE BETS
-    st.markdown("### 💵 Kelly Value Bet Önerileri")
-    def calc_kelly(prob, odds):
-        val = (prob * odds) - 1.0
-        if val <= 0: return 0.0, 0.0
-        b = odds - 1.0
-        fk = ((prob * b) - (1.0 - prob)) / b * 0.25
-        return val, bankroll * max(0.0, fk)
+        # 9. İY / MS MATRIX
+        st.markdown("### 🔄 İY / MS Olasılık Matrisi (9 Kombinasyon)")
+        iy_ms_combos = [
+            ("1 / 1", (iy_res == 1) & (ms_res == 1)), ("X / 1", (iy_res == 0) & (ms_res == 1)), ("2 / 1", (iy_res == 2) & (ms_res == 1)),
+            ("1 / X", (iy_res == 1) & (ms_res == 0)), ("X / X", (iy_res == 0) & (ms_res == 0)), ("2 / X", (iy_res == 2) & (ms_res == 0)),
+            ("1 / 2", (iy_res == 1) & (ms_res == 2)), ("X / 2", (iy_res == 0) & (ms_res == 2)), ("2 / 2", (iy_res == 2) & (ms_res == 2))
+        ]
+        
+        i_cols = st.columns(3)
+        for idx, (lbl, cond) in enumerate(iy_ms_combos):
+            pr = np.sum(cond) / n_simulations
+            with i_cols[idx % 3]:
+                st.markdown(f"<div class='pro-card' style='padding:8px; text-align:center;'><b>{lbl}</b><br><span style='color:#34d399;'>%{pr*100:.1f}</span><br><span style='font-size:11px; color:#94a3b8;'>Adil: {get_fair_odds(pr)}</span></div>", unsafe_allow_html=True)
 
-    v1, s1 = calc_kelly(p_sim_ms1, odds_ms1)
-    v0, s0 = calc_kelly(p_sim_ms0, odds_ms0)
-    v2, s2 = calc_kelly(p_sim_ms2, odds_ms2)
+        # 10. TAKIM ÖZEL GOL PAZARLARI
+        st.markdown("### ⚽ Takım Özel Golleri")
+        tg1, tg2 = st.columns(2)
+        with tg1:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>🏠 {home_name}</b><br>
+                • 1.5 Üst: <b>%{np.sum(sim_home_goals > 1.5)/n_simulations*100:.1f}</b><br>
+                • 2.5 Üst: <b>%{np.sum(sim_home_goals > 2.5)/n_simulations*100:.1f}</b>
+            </div>
+            """, unsafe_allow_html=True)
+        with tg2:
+            st.markdown(f"""
+            <div class="pro-card">
+                <b>✈️ {away_name}</b><br>
+                • 1.5 Üst: <b>%{np.sum(sim_away_goals > 1.5)/n_simulations*100:.1f}</b><br>
+                • 2.5 Üst: <b>%{np.sum(sim_away_goals > 2.5)/n_simulations*100:.1f}</b>
+            </div>
+            """, unsafe_allow_html=True)
 
-    k_col1, k_col2, k_col3 = st.columns(3)
-    with k_col1: st.markdown(f"<div class='pro-card'><b>MS 1:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v1>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s1:.0f} ₺</b></div>", unsafe_allow_html=True)
-    with k_col2: st.markdown(f"<div class='pro-card'><b>MS 0:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v0>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s0:.0f} ₺</b></div>", unsafe_allow_html=True)
-    with k_col3: st.markdown(f"<div class='pro-card'><b>MS 2:</b> {'<span class=\"badge-success\">DEĞERLİ</span>' if v2>0 else '<span class=\"badge-danger\">PAS</span>'}<br>Öneri: <b>{s2:.0f} ₺</b></div>", unsafe_allow_html=True)
+# =========================================================
+# TAB 2: TOPLU BÜLTEN TARAMASI (CSV)
+# =========================================================
+with tab2:
+    st.subheader("📁 Günlük Bültenden Otomatik Maç Tarama & Analiz")
+    st.write("Aşağıdaki CSV formatında bülten dosyanızı yükleyerek tüm maçları xG, Tempo (Pace) ve 2/1 - 1/2 Geri Dönüş skorlarıyla toplu analiz ettirebilirsiniz.")
 
-    # 9. İY / MS MATRIX
-    st.markdown("### 🔄 İY / MS Olasılıkları")
-    iy_ms_combos = [
-        ("1 / 1", (iy_res == 1) & (ms_res == 1)), ("X / 1", (iy_res == 0) & (ms_res == 1)), ("2 / 1", (iy_res == 2) & (ms_res == 1)),
-        ("1 / X", (iy_res == 1) & (ms_res == 0)), ("X / X", (iy_res == 0) & (ms_res == 0)), ("2 / X", (iy_res == 2) & (ms_res == 0)),
-        ("1 / 2", (iy_res == 1) & (ms_res == 2)), ("X / 2", (iy_res == 0) & (ms_res == 2)), ("2 / 2", (iy_res == 2) & (ms_res == 2))
-    ]
+    uploaded_file = st.file_uploader("Bülten Dosyasını Seçin (.csv)", type=["csv"], key="bulten_csv")
     
-    i_cols = st.columns(3)
-    for idx, (lbl, cond) in enumerate(iy_ms_combos):
-        pr = np.sum(cond) / n_simulations
-        with i_cols[idx % 3]:
-            st.markdown(f"<div class='pro-card' style='padding:8px; text-align:center;'><b>{lbl}</b><br><span style='color:#34d399;'>%{pr*100:.1f}</span></div>", unsafe_allow_html=True)
+    # Örnek Şablon Verisi
+    sample_bulten = pd.DataFrame({
+        "Ev_Sahibi": ["Glentoran", "Beşiktaş", "Galatasaray", "Real Madrid"],
+        "Deplasman": ["Dungannon", "Trabzonspor", "Fenerbahçe", "Barcelona"],
+        "Ev_Attigi": [2.10, 1.80, 2.20, 2.40],
+        "Ev_Yedigi": [1.20, 0.90, 1.00, 1.10],
+        "Ev_Pace": [68.0, 65.0, 70.0, 72.0],
+        "Dep_Attigi": [1.10, 1.40, 1.90, 2.10],
+        "Dep_Yedigi": [1.80, 1.30, 1.10, 1.20],
+        "Dep_Pace": [62.0, 60.0, 66.0, 69.0],
+        "MS1_Oran": [1.40, 1.90, 2.10, 2.00],
+        "MS0_Oran": [3.80, 3.40, 3.30, 3.50],
+        "MS2_Oran": [5.50, 3.20, 2.90, 3.00],
+        "Oran_21": [21.0, 22.0, 20.0, 19.0],
+        "Oran_12": [25.0, 24.0, 22.0, 21.0]
+    })
 
-    # 10. TAKIM ÖZEL GOL PAZARLARI
-    st.markdown("### ⚽ Takım Özel Golleri")
-    tg1, tg2 = st.columns(2)
-    with tg1:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>🏠 {home_name}</b><br>
-            • 1.5 Üst: <b>%{np.sum(sim_home_goals > 1.5)/n_simulations*100:.1f}</b><br>
-            • 2.5 Üst: <b>%{np.sum(sim_home_goals > 2.5)/n_simulations*100:.1f}</b>
-        </div>
-        """, unsafe_allow_html=True)
-    with tg2:
-        st.markdown(f"""
-        <div class="pro-card">
-            <b>✈️ {away_name}</b><br>
-            • 1.5 Üst: <b>%{np.sum(sim_away_goals > 1.5)/n_simulations*100:.1f}</b><br>
-            • 2.5 Üst: <b>%{np.sum(sim_away_goals > 2.5)/n_simulations*100:.1f}</b>
-        </div>
-        """, unsafe_allow_html=True)
+    if uploaded_file is not None:
+        try:
+            df_bulten = pd.read_csv(uploaded_file)
+        except Exception as e:
+            st.error(f"Dosya okuma hatası: {e}")
+            df_bulten = sample_bulten
+    else:
+        st.info("💡 Henüz bir dosya yüklemediniz. Aşağıda **örnek bülten verisi** gösterilmektedir:")
+        df_bulten = sample_bulten
+
+    st.dataframe(df_bulten, use_container_width=True)
+
+    if st.button("🚀 Bülten Maçlarını Toplu Analiz Et", key="run_bulk"):
+        results = []
+        for idx, row in df_bulten.iterrows():
+            ev = row.get("Ev_Sahibi", f"Ev_{idx}")
+            dep = row.get("Deplasman", f"Dep_{idx}")
+            ev_att = float(row.get("Ev_Attigi", 1.5))
+            ev_def = float(row.get("Ev_Yedigi", 1.2))
+            dep_att = float(row.get("Dep_Attigi", 1.2))
+            dep_def = float(row.get("Dep_Yedigi", 1.5))
+            ev_p = float(row.get("Ev_Pace", 65.0))
+            dep_p = float(row.get("Dep_Pace", 65.0))
+            
+            ms1_o = float(row.get("MS1_Oran", 2.0))
+            ms2_o = float(row.get("MS2_Oran", 3.0))
+            o_21 = float(row.get("Oran_21", 20.0))
+            o_12 = float(row.get("Oran_12", 22.0))
+
+            xg_ev = (ev_att + dep_def) / 2.0
+            xg_dep = (dep_att + ev_def) / 2.0
+            pace = (ev_p + dep_p) / 2.0
+
+            # 2/1 Skor
+            p_21 = 0
+            if (18.5 <= o_21 <= 24.5) or (1.3 <= ms1_o <= 1.65): p_21 += 35
+            if pace >= 64 and xg_ev >= 1.6: p_21 += 35
+            if ev_def >= 1.0: p_21 += 30
+
+            # 1/2 Skor
+            p_12 = 0
+            if (18.5 <= o_12 <= 28.0) or (1.3 <= ms2_o <= 1.85): p_12 += 35
+            if pace >= 64 and xg_dep >= 1.4: p_12 += 35
+            if dep_def >= 1.0: p_12 += 30
+
+            results.append({
+                "Ev Sahibi": ev,
+                "Deplasman": dep,
+                "Ev xG": round(xg_ev, 2),
+                "Dep xG": round(xg_dep, 2),
+                "Beklenen Pace": round(pace, 1),
+                "Toplam xG": round(xg_ev + xg_dep, 2),
+                "2/1 Potansiyel %": p_21,
+                "1/2 Potansiyel %": p_12,
+                "Tavsiye / Durum": "🔥 Yüksek 2/1" if p_21 >= 70 else ("⚡ Sürpriz 1/2" if p_12 >= 70 else "Normal")
+            })
+
+        df_res = pd.DataFrame(results)
+        st.subheader("📋 Toplu Analiz Sonuçları")
+        st.dataframe(df_res, use_container_width=True)
+
+        # CSV İndirme
+        csv_data = df_res.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Sonuçları CSV Olarak İndir",
+            data=csv_data,
+            file_name="bulten_analiz_sonuclari.csv",
+            mime="text/csv"
+        )
+
+# =========================================================
+# TAB 3: REFERANS TRENDLER & NOKTA ORANLAR
+# =========================================================
+with tab3:
+    st.subheader("📚 1.000 Maçlık 2/1 & 1/2 Veri Analiz Tablosu")
+    st.write("Veri modelinde ağırlıklandırma yapılan ve tarihsel maçlarda en sık 2/1 ve 1/2 getiren ön-skor ve tempo kombinasyonları:")
+
+    referans_data = {
+        "Skor Dizilimi (2 Önceki -> 1 Önceki)": [
+            "2-1 -> 1-0",
+            "2-0 -> 2-1",
+            "1-1 -> 2-1",
+            "1-0 -> 2-0",
+            "3-1 -> 2-0",
+        ],
+        "1.000 Maçtaki Frekansı": [112, 98, 85, 76, 54],
+        "Veri Payı (%)": ["%11,2", "%9,8", "%8,5", "%7,6", "%5,4"],
+        "Kriter Notu & Strateji": [
+            "Kıl payı galip gelen ama ilk yarı rehavete kapılan takımlar",
+            "Yüksek tempolu ve kazanma reaksiyonu yüksek lig liderleri",
+            "KG Var biten, kalesini gole kapatamayan ama maçı çevirebilen ekipler",
+            "İç saha rahatlığıyla maça giren, erken gol yiyip dönen favoriler",
+            "Evinde şok gol yiyip 2. yarı maçı söken yüksek xG'li takımlar",
+        ],
+    }
+    st.table(pd.DataFrame(referans_data))
+
+    st.markdown("---")
+    st.subheader("🎯 Nokta Oran & İstatistiki Band Bilgileri")
+    st.markdown("""
+    - **En Çok 2/1 Gelen Oran Bandı:** 2/1 Oranı **18.50 - 22.50** arasında ve MS 1 Oranı **1.30 - 1.60** arasında olduğunda %39.5 başarı oranı gözlenmiştir.
+    - **En Çok 1/2 Gelen Oran Bandı:** 1/2 Oranı **21.00 - 28.00** arasında ve MS 2 Oranı **1.40 - 1.85** arasında olduğunda deplasman reaksiyonu yüksek olmaktadır.
+    - **Pace (Oyun Temposu) Eşiği:** Beklenen ortalama pace $\ge 64.0$ olduğunda maç içi gol ve pozisyon sayısı arttığı için ilk yarı yenik duruma düşen favorinin maçı çevirme ihtimali katlanmaktadır.
+    """)
