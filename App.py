@@ -12,11 +12,11 @@ st.set_page_config(
     page_title="Pro Football Engine - Ultimate Mobile", 
     page_icon="⚽", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # ---------------------------------------------------------
-# MOBILE-FIRST STYLING (CSS)
+# MOBILE-FIRST STYLING (CSS - SIDEBAR HIDDEN)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -30,6 +30,9 @@ st.markdown("""
     .stApp { background-color: #0b0f17 !important; }
     header[data-testid="stHeader"] { background: rgba(11, 15, 23, 0.9) !important; backdrop-filter: blur(8px); }
     footer { visibility: hidden; }
+
+    /* Sol Yan Menüyü Tamamen Gizle */
+    section[data-testid="stSidebar"] { display: none !important; }
 
     .pro-card {
         background: linear-gradient(145deg, #131b2e 0%, #0f1623 100%);
@@ -74,7 +77,6 @@ st.markdown("""
     }
 
     div[data-baseweb="input"] { background-color: #1a2332 !important; border-color: #334155 !important; border-radius: 8px !important; }
-    section[data-testid="stSidebar"] { background-color: #0f172a !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -126,33 +128,6 @@ def run_simulation(xg_home, xg_away, rho, use_dc, n_simulations):
     return sim_home_goals, sim_away_goals, sim_iy_home, sim_iy_away
 
 # ---------------------------------------------------------
-# SIDEBAR PARAMETERS
-# ---------------------------------------------------------
-with st.sidebar:
-    st.markdown("### ⚙️ Lig & Model Ayarları")
-    league_preset = st.selectbox("🏆 Lig Şablonu", ["Özel / Elle Gir", "Süper Lig (TR)", "Premier League (UK)", "La Liga (ES)", "Bundesliga (DE)"], key="league_preset")
-    
-    if league_preset == "Süper Lig (TR)":
-        default_h, default_a = 1.55, 1.25
-    elif league_preset == "Premier League (UK)":
-        default_h, default_a = 1.58, 1.32
-    elif league_preset == "La Liga (ES)":
-        default_h, default_a = 1.42, 1.12
-    elif league_preset == "Bundesliga (DE)":
-        default_h, default_a = 1.70, 1.40
-    else:
-        default_h, default_a = 1.50, 1.20
-
-    league_home_xg = st.number_input("Lig Ev Ort. Gol", min_value=0.1, max_value=4.0, value=default_h, step=0.05)
-    league_away_xg = st.number_input("Lig Dep Ort. Gol", min_value=0.1, max_value=4.0, value=default_a, step=0.05)
-
-    st.markdown("---")
-    n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000)
-    bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500)
-    use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True)
-    rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01) if use_dixon_coles else 0.0
-
-# ---------------------------------------------------------
 # MAIN HEADER
 # ---------------------------------------------------------
 st.markdown("""
@@ -161,6 +136,40 @@ st.markdown("""
     <p style="margin:4px 0 0 0; color: #94a3b8; font-size: 13px;">Monte Carlo Dixon-Coles + Pace Metriği + Nokta Oran & İY/MS Potansiyeli</p>
 </div>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# MODEL & LİG AYARLARI (ÜST AÇILIR PANEL)
+# ---------------------------------------------------------
+with st.expander("⚙️ Lig & Model Ayarları (Değiştirmek İçin Tıklayın)", expanded=False):
+    col_s1, col_s2, col_s3 = st.columns(3)
+    
+    with col_s1:
+        league_preset = st.selectbox(
+            "🏆 Lig Şablonu", 
+            ["Özel / Elle Gir", "Süper Lig (TR)", "Premier League (UK)", "La Liga (ES)", "Bundesliga (DE)"], 
+            key="league_preset"
+        )
+        if league_preset == "Süper Lig (TR)":
+            default_h, default_a = 1.55, 1.25
+        elif league_preset == "Premier League (UK)":
+            default_h, default_a = 1.58, 1.32
+        elif league_preset == "La Liga (ES)":
+            default_h, default_a = 1.42, 1.12
+        elif league_preset == "Bundesliga (DE)":
+            default_h, default_a = 1.70, 1.40
+        else:
+            default_h, default_a = 1.50, 1.20
+
+        league_home_xg = st.number_input("Lig Ev Ort. Gol", min_value=0.1, max_value=4.0, value=default_h, step=0.05)
+        league_away_xg = st.number_input("Lig Dep Ort. Gol", min_value=0.1, max_value=4.0, value=default_a, step=0.05)
+
+    with col_s2:
+        n_simulations = st.select_slider("Simülasyon Sayısı", options=[1000, 5000, 10000, 20000], value=10000)
+        bankroll = st.number_input("Kasa (₺)", min_value=100, value=10000, step=500)
+
+    with col_s3:
+        use_dixon_coles = st.checkbox("Dixon-Coles Düzeltmesi", value=True)
+        rho = st.slider("Rho (Korelasyon)", -0.30, 0.0, -0.13, 0.01) if use_dixon_coles else 0.0
 
 # ---------------------------------------------------------
 # NAVIGATION TABS
@@ -272,7 +281,6 @@ with tab1:
         # -----------------------------------------------------
         # İY / MS GERİ DÖNÜŞ (2/1 VE 1/2) PUANLAMA MODÜLÜ
         # -----------------------------------------------------
-        # 2/1 Potansiyel Puanı
         puan_21 = 0
         sebepler_21 = []
         if (18.50 <= odds_21 <= 24.50) or (1.30 <= odds_ms1 <= 1.65):
@@ -288,7 +296,6 @@ with tab1:
             puan_21 += 25
             sebepler_21.append(f"Önceki 2 Maç Dizilimi Tarihsel 2/1 Trendiyle Eşleşiyor ({home_son_iki})")
 
-        # 1/2 Potansiyel Puanı
         puan_12 = 0
         sebepler_12 = []
         if (18.50 <= odds_12 <= 28.00) or (1.30 <= odds_ms2 <= 1.85):
@@ -611,7 +618,6 @@ with tab2:
 
     uploaded_file = st.file_uploader("Bülten Dosyasını Seçin (.csv)", type=["csv"], key="bulten_csv")
     
-    # Örnek Şablon Verisi
     sample_bulten = pd.DataFrame({
         "Ev_Sahibi": ["Glentoran", "Beşiktaş", "Galatasaray", "Real Madrid"],
         "Deplasman": ["Dungannon", "Trabzonspor", "Fenerbahçe", "Barcelona"],
@@ -661,13 +667,11 @@ with tab2:
             xg_dep = (dep_att + ev_def) / 2.0
             pace = (ev_p + dep_p) / 2.0
 
-            # 2/1 Skor
             p_21 = 0
             if (18.5 <= o_21 <= 24.5) or (1.3 <= ms1_o <= 1.65): p_21 += 35
             if pace >= 64 and xg_ev >= 1.6: p_21 += 35
             if ev_def >= 1.0: p_21 += 30
 
-            # 1/2 Skor
             p_12 = 0
             if (18.5 <= o_12 <= 28.0) or (1.3 <= ms2_o <= 1.85): p_12 += 35
             if pace >= 64 and xg_dep >= 1.4: p_12 += 35
@@ -689,7 +693,6 @@ with tab2:
         st.subheader("📋 Toplu Analiz Sonuçları")
         st.dataframe(df_res, use_container_width=True)
 
-        # CSV İndirme
         csv_data = df_res.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Sonuçları CSV Olarak İndir",
