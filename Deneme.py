@@ -10,9 +10,8 @@ from google import genai
 # =========================================================================
 MY_API_KEY = "AQ.Ab8RN6L9SIeHkACTIzOuPAclyERZr8CtbCqg3ICSDP_U9qJ-IQ"
 
-# API Key temizliği ve sistem değişkenine aktarılması
+# API Key temizliği
 CLEAN_KEY = MY_API_KEY.strip()
-os.environ["GEMINI_API_KEY"] = CLEAN_KEY
 
 # Sayfa Yapilandirmasi
 st.set_page_config(
@@ -33,12 +32,12 @@ if uploaded_file:
     if st.button("📊 IY/MS Detayli Analiz Et", type="primary"):
         # API Key Kontrolü
         if not CLEAN_KEY or "BURAYA_KENDI_API_KEYINIZI_YAPISTIRIN" in CLEAN_KEY:
-            st.error("⚠️ Lutfen app.py dosyasinin en ustundeki MY_API_KEY kismina kendi geçerli Gemini API Key'inizi yapistirin!")
+            st.error("⚠️ Lutfen app.py dosyasinin en ustundeki MY_API_KEY kismina kendi gecerli Gemini API Key'inizi yapistirin!")
         else:
             with st.spinner("Bultendeki tum maclar analiz ediliyor..."):
                 try:
-                    # Client ortam değişkenindeki GEMINI_API_KEY değerini okur
-                    client = genai.Client()
+                    # Client'a API Key doğrudan parametre olarak aktarılır (401 Hatasını Çözer)
+                    client = genai.Client(api_key=CLEAN_KEY)
                     
                     prompt = """
                     Sen uzman bir iddaa ve bahis istatistik analizörüsün.
