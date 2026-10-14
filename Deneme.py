@@ -8,7 +8,7 @@ from google import genai
 # =========================================================================
 # 🔑 AŞAĞIDAKİ ÇİFT TIRNAK İÇİNE KENDİ GEMINI API KEY'İNİZİ YAPIŞTIRIN:
 # =========================================================================
-MY_API_KEY = "AIzaSy_BURAYA_KENDI_API_KEYINIZI_YAPISTIRIN"
+MY_API_KEY = "AQ.Ab8RN6L9SIeHkACTIzOuPAclyERZr8CtbCqg3ICSDP_U9qJ-IQ"
 
 # API Key temizliği ve sistem değişkenine aktarılması
 CLEAN_KEY = MY_API_KEY.strip()
