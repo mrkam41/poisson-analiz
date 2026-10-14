@@ -1,126 +1,53 @@
 import streamlit as st
-import numpy as np
-from scipy.stats import poisson
+from PIL import Image
+from google import genai
 
-# Mobil uyumlu sayfa ayarları
-st.set_page_config(page_title="Hızlı İddaa Analiz", page_icon="⚡", layout="centered")
+# Sayfa Ayarları
+st.set_page_config(page_title="İY/MS Analiz ve Tahmin Asistanı", layout="wide")
 
-st.title("⚡ Hızlı & Pratik İddaa Analiz")
-st.write("Takımların son 5 maçtaki **toplam** attığı ve yediği gol sayılarını kaydırarak seçin!")
+st.title("⚽ İY/MS (İlk Yarı / Maç Sonucu) Yapay Zeka Analizörü")
+st.write("Bülten ekran görüntüsünü yükleyin, sistem İY/MS potansiyeli en yüksek maçları çıkarsın.")
 
-st.markdown("---")
+# API Key Girişi (Gemini API)
+api_key = st.sidebar.text_input("Gemini API Key Giriniz:", type="password")
 
-# Kullanıcı Giriş Alanları (Kaydırmalı Slider)
-col1, col2 = st.columns(2)
+uploaded_file = st.file_uploader("Bülten Görselini Yükleyin (PNG, JPG)", type=["png", "jpg", "jpeg"])
 
-with col1:
-    st.subheader("🏠 Ev Sahibi")
-    home_scored_total = st.slider("Attığı Toplam Gol", 0, 25, 9, key="hs")
-    home_conceded_total = st.slider("Yediği Toplam Gol", 0, 25, 4, key="hc")
-
-with col2:
-    st.subheader("✈️ Deplasman")
-    away_scored_total = st.slider("Attığı Toplam Gol", 0, 25, 6, key="as")
-    away_conceded_total = st.slider("Yediği Toplam Gol", 0, 25, 8, key="ac")
-
-st.markdown("---")
-
-# Maç Başı Ortalamaları Hesapla (Son 5 Maç)
-avg_home_scored = home_scored_total / 5.0
-avg_home_conceded = home_conceded_total / 5.0
-avg_away_scored = away_scored_total / 5.0
-avg_away_conceded = away_conceded_total / 5.0
-
-# Beklenen Gol (xG) Hesaplama
-league_avg = 1.35
-exp_home = max(0.2, (avg_home_scored / league_avg) * (avg_away_conceded / league_avg) * league_avg)
-exp_away = max(0.2, (avg_away_scored / league_avg) * (avg_home_conceded / league_avg) * league_avg)
-
-# Poisson Matrisi
-max_g = 8
-home_p = [poisson.pmf(i, exp_home) for i in range(max_g)]
-away_p = [poisson.pmf(j, exp_away) for j in range(max_g)]
-
-ms1, ms0, ms2 = 0.0, 0.0, 0.0
-o15, o25, o35 = 0.0, 0.0, 0.0
-kg_var = 0.0
-exact_scores = []
-
-for i in range(max_g):
-    for j in range(max_g):
-        p = home_p[i] * away_p[j]
-        
-        # Taraf İhtimalleri
-        if i > j: ms1 += p
-        elif i == j: ms0 += p
-        else: ms2 += p
-
-        # Gol Üstü İhtimalleri
-        tot = i + j
-        if tot > 1.5: o15 += p
-        if tot > 2.5: o25 += p
-        if tot > 3.5: o35 += p
-
-        # KG Var
-        if i > 0 and j > 0: kg_var += p
-
-        exact_scores.append((f"{i}-{j}", p * 100))
-
-exact_scores.sort(key=lambda x: x[1], reverse=True)
-
-# İY Tahminleri & Çifte Şans
-exp_ht = (exp_home + exp_away) * 0.44
-iy_05 = (1 - poisson.pmf(0, exp_ht)) * 100
-iy_15 = (1 - poisson.pmf(0, exp_ht) - poisson.pmf(1, exp_ht)) * 100
-
-dc_1x = (ms1 + ms0) * 100
-dc_x2 = (ms0 + ms2) * 100
-dc_12 = (ms1 + ms2) * 100
-
-ms1_pct, ms0_pct, ms2_pct = ms1 * 100, ms0 * 100, ms2 * 100
-
-# En Yüksek Güvenli Öneri
-candidates = [
-    ("1.5 Gol Üstü", o15 * 100),
-    ("2.5 Gol Üstü", o25 * 100),
-    ("İlk Yarı 0.5 Üstü", iy_05),
-    ("Karşılıklı Gol Var", kg_var * 100),
-    ("Çifte Şans 1X", dc_1x),
-    ("Çifte Şans X2", dc_x2),
-    ("Maç Sonucu 1", ms1_pct),
-    ("Maç Sonucu 2", ms2_pct),
-]
-candidates.sort(key=lambda x: x[1], reverse=True)
-top_rec = candidates[0]
-
-# TAVSİYE BANNERI
-st.success(f"🎯 **Yapay Zeka Önerisi:** {top_rec[0]} (Güven: **%{top_rec[1]:.1f}**)")
-
-# ANALİZ SONUÇLARI
-st.markdown("### 📊 Maç Sonucu (MS) & Çifte Şans")
-c1, c2, c3 = st.columns(3)
-c1.metric("MS 1", f"%{ms1_pct:.1f}")
-c2.metric("MS 0 (X)", f"%{ms0_pct:.1f}")
-c3.metric("MS 2", f"%{ms2_pct:.1f}")
-
-c4, c5, c6 = st.columns(3)
-c4.metric("1X Çifte Şans", f"%{dc_1x:.1f}")
-c5.metric("1-2 Çifte Şans", f"%{dc_12:.1f}")
-c6.metric("X2 Çifte Şans", f"%{dc_x2:.1f}")
-
-st.markdown("### ⚽ Gol & KG İhtimalleri")
-g1, g2, g3 = st.columns(3)
-g1.metric("İY 0.5 Üst", f"%{iy_05:.1f}")
-g2.metric("1.5 Gol Üstü", f"%{o15*100:.1f}")
-g3.metric("2.5 Gol Üstü", f"%{o25*100:.1f}")
-
-g4, g5, g6 = st.columns(3)
-g4.metric("İY 1.5 Üst", f"%{iy_15:.1f}")
-g5.metric("3.5 Gol Üstü", f"%{o35*100:.1f}")
-g6.metric("KG Var", f"%{kg_var*100:.1f}")
-
-st.markdown("### 🎯 En Olası Skorlar")
-s1, s2, s3 = st.columns(3)
-s1.metric(f"1. {exact_scores[0][0]}", f"%{exact_scores[0][1]:.1f}")
-s2.metric(f"2. {exact_scores[1][0]}", f"%{exact_scores[1][1]:.1f}")
-s3.metric(f"3. {exact_scores[2][0]}", f"%{exact_scores[2][1]:.1f}")
+if uploaded_file and api_key:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Yüklenen Bültenden Kesit", use_column_width=True)
+    
+    if st.button("📊 Maçları Analiz Et ve İY/MS Önerilerini Getir"):
+        with st.spinner("Bültendeki tüm maçlar ve istatistikler analiz ediliyor..."):
+            try:
+                client = genai.Client(api_key=api_key)
+                
+                prompt = """
+                Sen uzman bir iddaa ve bahis istatistik analizörüsün.
+                Sana verilen bülten görselindeki tüm maçları incele.
+                
+                Özellikle şu İY/MS (İlk Yarı / Maç Sonucu) senaryolarına odaklan:
+                1. Ters Gelme / Geri Dönüş Potansiyeli (1/2 veya 2/1)
+                2. Beraberlik Kilitlenmesi / İkinci Yarı Çözülme (1/0 veya 2/0)
+                3. Erken Dominasyon / Banko (1/1 veya 2/2)
+                
+                Lütfen çıktıyı şu formatta ver:
+                - **Maç Adı ve Saati**
+                - **Önerilen İY/MS Tercihi**
+                - **Analiz ve Neden Bu Seçim yapıldı? (Takım yapıları, oran uyumu)**
+                - **Güven Seviyesi (%):**
+                """
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[image, prompt]
+                )
+                
+                st.success("Analiz Tamamlandı!")
+                st.markdown("---")
+                st.markdown(response.text)
+                
+            except Exception as e:
+                st.error(f"Hata oluştu: {e}")
+elif not api_key and uploaded_file:
+    st.warning("Lütfen sol menüden Gemini API Key'inizi giriniz.")
