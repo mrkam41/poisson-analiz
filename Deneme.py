@@ -2,6 +2,14 @@ import streamlit as st
 from PIL import Image
 from google import genai
 
+# =========================================================
+# 🔑 API KEY'İNİZİ AŞAĞIDAKİ TIKNAKLARIN İÇİNE YAPIŞTIRIN
+# =========================================================
+RAW_API_KEY = "AQ.Ab8RN6L9SIeHkACTIzOuPAclyERZr8CtbCqg3ICSDP_U9qJ-IQ"
+
+# API Key temizleme (fark etmeden eklenen boşluk/satır başlarını siler)
+API_KEY = RAW_API_KEY.strip()
+
 # Sayfa Yapılandırması
 st.set_page_config(
     page_title="⚽ İY/MS Analizör & Tahmin Asistanı",
@@ -12,31 +20,21 @@ st.set_page_config(
 st.title("⚽ İY/MS Yapay Zeka Analiz Sistemi")
 st.markdown("Bülten ekran görüntüsünü yükleyin; sistem **1/2, 2/1, 1/0, 2/0** ve **1/1 - 2/2** potansiyeli yüksek maçları çıkarsın.")
 
-# Yan Menü: API Key Kontrolü (Streamlit Secrets veya Kullanıcı Girişi)
-st.sidebar.header("🔑 Bağlantı Ayarları")
-
-# Önce Streamlit Secrets kontrol edilir, yoksa kullanıcıdan istenir
-api_key = None
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
-    st.sidebar.success("API Anahtarı Tanımlı (Secrets) ✅")
-else:
-    api_key = st.sidebar.text_input("Gemini API Key Giriniz:", type="password")
-    st.sidebar.info("[Buradan ücretsiz API key alabilirsiniz](https://aistudio.google.com/)")
-
 uploaded_file = st.file_uploader("📸 Bülten Görselini Yükleyin (PNG, JPG)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
-    st.image(image, caption="Yüklenen İddaa Bültenden Kesit", use_column_width=True)
+    st.image(image, caption="Yüklenen İddaa Bülteninden Kesit", use_column_width=True)
     
     if st.button("📊 İY/MS Detaylı Analiz Et", type="primary"):
-        if not api_key:
-            st.error("Lütfen devam etmek için Gemini API Key girin.")
+        # API Key kontrolü
+        if not API_KEY or API_KEY == "BURAYA_GEMINI_API_KEY_YAPISTIRIN":
+            st.error("⚠️ Lütfen app.py dosyasındaki RAW_API_KEY değişkenine geçerli bir Gemini API Key ekleyin.")
         else:
             with st.spinner("Bültendeki tüm maçlar, oranlar ve takımlar analiz ediliyor..."):
                 try:
-                    client = genai.Client(api_key=api_key)
+                    # GenAI Client başlatma
+                    client = genai.Client(api_key=API_KEY)
                     
                     prompt = """
                     Sen uzman bir iddaa ve bahis istatistik analizörüsün.
@@ -64,4 +62,8 @@ if uploaded_file:
                     st.markdown(response.text)
                     
                 except Exception as e:
-                    st.error(f"Bir hata oluştu: {str(e)}")
+                    error_msg = str(e)
+                    if "API_KEY_INVALID" in error_msg or "400" in error_msg:
+                        st.error("❌ Hata: Girdiğiniz API Key geçersiz veya hatalı. Lütfen Google AI Studio'dan aldığınız key'i kontrol edip tekrar yapıştırın.")
+                    else:
+                        st.error(f"Bir hata oluştu: {error_msg}")
